@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from palpitaria.config import settings
 from palpitaria.models import Fixture, Team, TeamProfile
 from palpitaria.services.football_data_client import FootballDataClient
+from palpitaria.services.venues import apply_venue
 
 
 def _parse_utc(value: str) -> datetime:
@@ -101,6 +102,7 @@ def ingest_world_cup(
         fixture.away_team_id = away.id
         fixture.home_score = _extract_score(match, "home")
         fixture.away_score = _extract_score(match, "away")
+        apply_venue(fixture)
         fixture_count += 1
 
     log(f"Fixtures processadas: {fixture_count}")

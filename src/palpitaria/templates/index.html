@@ -23,7 +23,7 @@
   <form hx-post="/sync-profiles" hx-target="#sync-result" hx-swap="innerHTML">
     <button type="submit" class="secondary" data-loading="profiles">2. Atualizar Perfis (~5 min)</button>
   </form>
-  <form hx-post="/analyze" hx-target="#sync-result" hx-swap="innerHTML">
+  <form hx-post="/analyze" hx-target="#sync-result" hx-swap="innerHTML" hx-timeout="600000">
     <button type="submit" class="yellow" data-loading="analyze">3. Gerar Leituras de Hoje</button>
   </form>
   <p class="sub" style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--muted);">
@@ -48,6 +48,7 @@
           </div>
           <div class="meta" style="margin: 0;">
             📅 {{ a.utc_date | kickoff(app_timezone) }} ({{ app_timezone }})
+            {% if a.venue_label %} · 📍 {{ a.venue_label }}{% endif %}
             {% if a.group_name %} · 🏆 {{ a.group_name }}{% endif %}
             · 📊 Score: <strong>{{ a.goal_potential_score }}/100</strong>
           </div>
@@ -167,6 +168,7 @@
         </div>
         <div class="meta" style="margin: 0;">
           📅 {{ a.utc_date | kickoff(app_timezone) }} ({{ app_timezone }})
+          {% if a.venue_label %} · 📍 {{ a.venue_label }}{% endif %}
         </div>
       </div>
       <div style="display: flex; align-items: center; gap: 1rem;">

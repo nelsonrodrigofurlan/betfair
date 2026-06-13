@@ -181,6 +181,7 @@ def run_analysis(request: Request, db: Session = Depends(get_db)):
         home_insights, away_insights, match_context = enrich_fixture_analysis(
             db,
             fixture_id=analysis.fixture_id,
+            external_id=fixture.external_id,
             home_team_id=fixture.home_team_id,
             away_team_id=fixture.away_team_id,
             home_name=analysis.home_name,

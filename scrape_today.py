@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Roda o scraper para os jogos de hoje (bastidores + contexto de jogo).
-
 Pipeline:
   1. Números da API já devem estar no banco (passo 2 do app).
   2. Este script coleta bastidores das seleções e contexto (clima/árbitro/gramado).
@@ -16,6 +15,10 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
@@ -50,6 +53,7 @@ def scrape_today_teams(db, full: bool = False) -> None:
         home, away, ctx = enrich_fixture_analysis(
             db,
             fixture_id=analysis.fixture_id,
+            external_id=fixture.external_id,
             home_team_id=fixture.home_team_id,
             away_team_id=fixture.away_team_id,
             home_name=analysis.home_name,

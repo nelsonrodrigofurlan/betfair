@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS public.fixtures (
     away_team_id INTEGER REFERENCES public.teams(id),
     home_score INTEGER,
     away_score INTEGER,
+    venue_stadium TEXT,
+    venue_city TEXT,
+    venue_state TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

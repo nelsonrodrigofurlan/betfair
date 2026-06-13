@@ -42,6 +42,15 @@ class FixtureAnalysis:
     home_insights: dict | None = None
     away_insights: dict | None = None
     match_context: dict | None = None  # Clima, Árbitro, Gramado
+    venue_stadium: str | None = None
+    venue_city: str | None = None
+    venue_state: str | None = None
+
+    @property
+    def venue_label(self) -> str | None:
+        if self.venue_city and self.venue_state:
+            return f"{self.venue_city}, {self.venue_state}"
+        return self.venue_city or self.venue_state
 
 
 @dataclass
@@ -111,6 +120,9 @@ def analyze_fixture(db: Session, fixture: Fixture) -> FixtureAnalysis:
         group_name=fixture.group_name,
         goal_potential_score=0.0,
         excluded=False,
+        venue_stadium=fixture.venue_stadium,
+        venue_city=fixture.venue_city,
+        venue_state=fixture.venue_state,
     )
 
     if home_profile is None or away_profile is None:

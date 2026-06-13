@@ -35,6 +35,15 @@ def migrate_to_supabase():
             conn.execute(text(
                 "ALTER TABLE fixture_reports ADD COLUMN IF NOT EXISTS match_context_json TEXT"
             ))
+            conn.execute(text(
+                "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS venue_stadium VARCHAR(120)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS venue_city VARCHAR(80)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS venue_state VARCHAR(40)"
+            ))
 
         # 1. Create Default Branches
         print("Seeding default branches...")

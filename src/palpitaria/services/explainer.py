@@ -20,7 +20,10 @@ Regras de Ouro:
    - Parágrafo 3: Alertas de risco específicos (ex: "O árbitro rigoroso pode gerar muitas interrupções, dificultando o Over 1.5").
 
 Tom de voz: Profissional, analítico, direto ao ponto. Use termos como 'valor', 'exposição', 'leitura de fluxo', 'equilíbrio'.
-Máximo 3 parágrafos. Não invente dados."""
+Máximo 3 parágrafos. Não invente dados.
+6. ELENCO: Só cite jogadores presentes em home_insights/away_insights. "Não convocado" ≠ "lesionado/fora". Se não estiver nos dados, não mencione.
+"""
+
 
 
 def explain_analysis(analysis: FixtureAnalysis) -> str:
