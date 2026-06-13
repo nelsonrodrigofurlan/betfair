@@ -1,6 +1,14 @@
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _strip_env(value: object) -> object:
+    if isinstance(value, str):
+        return value.strip().strip('"').strip("'")
+    return value
 
 
 class Settings(BaseSettings):
@@ -17,13 +25,40 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/palpitaria.db"
     debug: bool = False
 
+    @field_validator(
+        "database_url",
+        "openai_api_key",
+        "football_data_token",
+        "openai_base_url",
+        "app_url",
+        mode="before",
+    )
+    @classmethod
+    def strip_quotes(cls, value: object) -> object:
+        return _strip_env(value)
+
     @property
     def db_url(self) -> str:
         url = self.database_url
         if url.startswith("postgres://"):
-            # Supabase/Postgres compatibility for SQLAlchemy
             url = url.replace("postgres://", "postgresql://", 1)
+        if "supabase.co" in url and "sslmode=" not in url:
+            parsed = urlparse(url)
+            query = parse_qs(parsed.query)
+            query["sslmode"] = ["require"]
+            url = urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
         return url
+
+    @property
+    def uses_sqlite(self) -> bool:
+        return self.db_url.startswith("sqlite")
+
+    @property
+    def db_host_label(self) -> str:
+        if self.uses_sqlite:
+            return "sqlite (local)"
+        parsed = urlparse(self.db_url)
+        return parsed.hostname or "postgresql"
 
     football_data_base_url: str = "https://api.football-data.org/v4"
     world_cup_code: str = "WC"

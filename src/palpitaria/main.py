@@ -329,14 +329,28 @@ def delete_bet(bet_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/health")
-def health() -> dict:
-    return {
+def health(db: Session = Depends(get_db)) -> dict:
+    from palpitaria.models import Fixture, Team
+
+    payload: dict = {
         "status": "ok",
         "football_data": settings.has_football_token,
         "llm": settings.has_llm,
         "llm_provider": settings.llm_provider_label,
         "llm_model": settings.openai_chat_model,
+        "database": "sqlite" if settings.uses_sqlite else "postgresql",
+        "database_host": settings.db_host_label,
+        "timezone": settings.app_timezone,
     }
+    try:
+        payload["teams"] = db.query(Team).count()
+        payload["fixtures"] = db.query(Fixture).count()
+        payload["fixtures_today"] = count_today_fixtures(db)
+        payload["fixtures_upcoming"] = count_upcoming_fixtures(db)
+    except Exception as exc:
+        payload["status"] = "degraded"
+        payload["database_error"] = str(exc)
+    return payload
 
 
 def run() -> None:
