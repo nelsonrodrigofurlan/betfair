@@ -502,7 +502,14 @@
 
     function toggleCard(el) {
       const card = el.closest('.card');
-      card.classList.toggle('collapsed');
+      if (!card) return;
+      const wasCollapsed = card.classList.contains('collapsed');
+      document.querySelectorAll('.card').forEach(function(c) {
+        c.classList.add('collapsed');
+      });
+      if (wasCollapsed) {
+        card.classList.remove('collapsed');
+      }
     }
 
     document.addEventListener('htmx:beforeRequest', function(evt) {
