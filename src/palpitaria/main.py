@@ -28,6 +28,7 @@ from palpitaria.services.football_data_client import FootballDataClient, Footbal
 from palpitaria.services.ingest import build_team_profiles, ingest_world_cup, localize_existing_teams
 from palpitaria.services.scraper import enrich_fixture_analysis
 from palpitaria.services.wc_profile_web import enrich_today_team_profiles
+from palpitaria.services.ledger import close_past_months, current_period, period_label
 from palpitaria.models import Fixture
 
 # Global log buffer for "Nerd Vision"
@@ -67,6 +68,15 @@ def on_startup() -> None:
         print(f"AVISO: {settings.database_config_error}", flush=True)
     try:
         init_db()
+        from palpitaria.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            closed = close_past_months(db)
+            if closed:
+                print(f"Ledger: {len(closed)} fechamento(s) mensal(is) consolidado(s).", flush=True)
+        finally:
+            db.close()
     except Exception as exc:
         msg = str(exc).lower()
         if "translate host" in msg or "getaddrinfo" in msg or "ipv6" in msg or "unreachable" in msg:
@@ -280,6 +290,10 @@ def list_branches(request: Request, db: Session = Depends(get_db)):
     from palpitaria.models import Branch, Bet
     from sqlalchemy import func
 
+    close_past_months(db)
+    cy, cm = current_period()
+    period_str = period_label(cy, cm)
+
     branches = db.query(Branch).all()
     
     # If no branches exist, create defaults
@@ -309,6 +323,52 @@ def list_branches(request: Request, db: Session = Depends(get_db)):
         {
             "branches": branches,
             "stats": stats,
+            "current_period": period_str,
+            "app_timezone": settings.app_timezone,
+        }
+    )
+
+
+@app.get("/historico", response_class=HTMLResponse)
+def list_historico(request: Request, db: Session = Depends(get_db)):
+    from palpitaria.models import BranchMonthlySummary
+
+    close_past_months(db)
+    cy, cm = current_period()
+
+    summaries = (
+        db.query(BranchMonthlySummary)
+        .order_by(
+            BranchMonthlySummary.year.desc(),
+            BranchMonthlySummary.month.desc(),
+            BranchMonthlySummary.branch_id,
+        )
+        .all()
+    )
+
+    rows = []
+    for s in summaries:
+        rows.append(
+            {
+                "period": period_label(s.year, s.month),
+                "branch_name": s.branch.name if s.branch else f"Filial #{s.branch_id}",
+                "bet_count": s.bet_count,
+                "win_count": s.win_count,
+                "loss_count": s.loss_count,
+                "pending_count": s.pending_count,
+                "total_stake": s.total_stake,
+                "total_pl": s.total_pl,
+                "closed_at": s.closed_at,
+            }
+        )
+
+    return TEMPLATES.TemplateResponse(
+        request,
+        "historico.html",
+        {
+            "rows": rows,
+            "current_period": period_label(cy, cm),
+            "app_timezone": settings.app_timezone,
         }
     )
 

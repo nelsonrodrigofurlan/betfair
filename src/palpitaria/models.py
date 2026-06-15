@@ -125,6 +125,7 @@ class Branch(Base):
     commission_rate: Mapped[float] = mapped_column(Float, default=6.5)  # % de comissão (ex: 6.5)
 
     bets: Mapped[list["Bet"]] = relationship(back_populates="branch")
+    monthly_summaries: Mapped[list["BranchMonthlySummary"]] = relationship(back_populates="branch")
 
 
 class Bet(Base):
@@ -142,3 +143,25 @@ class Bet(Base):
 
     branch: Mapped["Branch"] = relationship(back_populates="bets")
     fixture: Mapped["Fixture | None"] = relationship()
+
+
+class BranchMonthlySummary(Base):
+    """Consolidado mensal por filial — gerado ao virar o mês."""
+
+    __tablename__ = "branch_monthly_summaries"
+    __table_args__ = (UniqueConstraint("branch_id", "year", "month", name="uq_branch_month"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    branch_id: Mapped[int] = mapped_column(ForeignKey("branches.id"), index=True)
+    year: Mapped[int] = mapped_column(Integer, index=True)
+    month: Mapped[int] = mapped_column(Integer, index=True)
+    bet_count: Mapped[int] = mapped_column(Integer, default=0)
+    win_count: Mapped[int] = mapped_column(Integer, default=0)
+    loss_count: Mapped[int] = mapped_column(Integer, default=0)
+    pending_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_pl: Mapped[float] = mapped_column(Float, default=0.0)
+    total_stake: Mapped[float] = mapped_column(Float, default=0.0)
+    commission_rate: Mapped[float] = mapped_column(Float, default=6.5)
+    closed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    branch: Mapped["Branch"] = relationship(back_populates="monthly_summaries")

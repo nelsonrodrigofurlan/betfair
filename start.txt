@@ -1,0 +1,2 @@
+cd E:\GitHub\betfair
+.\.venv\Scripts\uvicorn.exe palpitaria.main:app --reload

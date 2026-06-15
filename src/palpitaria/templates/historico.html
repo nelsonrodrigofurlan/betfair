@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Histórico — Palpitaria FC{% endblock %}
+{% block content %}
+<header style="margin-bottom: 2rem;">
+  <h1>📅 Histórico Mensal</h1>
+  <p class="sub">Consolidado por filial — ao virar o mês, os cards ativos zeram e o fechamento aparece aqui</p>
+</header>
+
+<div class="card" style="margin-bottom: 1.5rem; background: #f0fdf4; border-color: #bbf7d0;">
+  <p style="margin: 0; font-size: 0.9rem;">
+    <strong>Mês ativo:</strong> {{ current_period }} — entradas lançadas agora vão para os cards em
+    <a href="/branches">Filiais (P&L)</a>.
+  </p>
+</div>
+
+{% if rows %}
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Período</th>
+        <th>Filial</th>
+        <th>Entradas</th>
+        <th>Greens</th>
+        <th>Reds</th>
+        <th>Pendentes</th>
+        <th>Stake total</th>
+        <th>P&L</th>
+        <th>Fechado em</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><strong>{{ row.period }}</strong></td>
+        <td>{{ row.branch_name }}</td>
+        <td>{{ row.bet_count }}</td>
+        <td class="pass">{{ row.win_count }}</td>
+        <td class="fail">{{ row.loss_count }}</td>
+        <td>{{ row.pending_count }}</td>
+        <td>{{ "%.2f"|format(row.total_stake) }}</td>
+        <td class="{% if row.total_pl >= 0 %}pass{% else %}fail{% endif %}">
+          {{ "%.2f"|format(row.total_pl) }}
+        </td>
+        <td style="font-size: 0.8rem; color: var(--muted);">{{ row.closed_at | kickoff(app_timezone) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="text-align: center; color: var(--muted);">
+  <p>Nenhum fechamento mensal ainda.</p>
+  <p style="font-size: 0.85rem; margin-top: 0.5rem;">
+    Quando o calendário virar para um novo mês, as entradas das filiais serão consolidadas aqui automaticamente.
+  </p>
+</div>
+{% endif %}
+{% endblock %}
