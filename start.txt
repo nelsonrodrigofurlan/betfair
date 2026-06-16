@@ -1,2 +1,10 @@
-cd E:\GitHub\betfair
-.\.venv\Scripts\uvicorn.exe palpitaria.main:app --reload
+cd E:\GitHub\palpitaria
+.\.venv\Scripts\python.exe -m uvicorn palpitaria.main:app --reload
+
+
+nelson.r.furlan@gmail.com
+Palpitaria@2026!
+
+
+Danilo Furlan: danilo.furlan@gmail.com | Senha: Danilo#Secure@2026
+Welligton Oliveira: welligton.oliveira@gmail.com | Senha: Welligton!Strong#2026

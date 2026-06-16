@@ -32,7 +32,7 @@ from palpitaria.services.ingest import build_team_profiles, ingest_competition, 
 from palpitaria.services.scraper import enrich_fixture_analysis
 from palpitaria.services.wc_profile_web import enrich_today_team_profiles
 from palpitaria.services.chat_service import process_user_message
-from palpitaria.services.ledger import close_past_months, current_period, period_label
+from palpitaria.services.ledger import bet_competition_expr, close_past_months, current_period, period_label
 from palpitaria.models import Fixture
 
 # Global log buffer for "Nerd Vision"
@@ -414,7 +414,7 @@ def list_branches(request: Request, comp: str | None = None, db: Session = Depen
             extract("month", Bet.created_at) == cm
         )
         if comp_code:
-            query = query.filter(Bet.competition_code == comp_code)
+            query = query.filter(bet_competition_expr() == comp_code)
 
         bets = query.order_by(Bet.created_at.desc()).all()
         

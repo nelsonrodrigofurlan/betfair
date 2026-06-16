@@ -6,10 +6,16 @@ from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from palpitaria.config import settings
 from palpitaria.models import Bet, Branch, BranchMonthlySummary
+
+
+def bet_competition_expr():
+    """Apostas antigas sem competition_code contam como Copa (WC)."""
+    return func.coalesce(Bet.competition_code, settings.world_cup_code)
 
 MONTHS_PT = (
     "",

@@ -66,6 +66,9 @@ def migrate_to_supabase():
             conn.execute(text(
                 "ALTER TABLE competitions ADD COLUMN IF NOT EXISTS season INTEGER DEFAULT 2026"
             ))
+            conn.execute(text(
+                "UPDATE bets SET competition_code = 'WC' WHERE competition_code IS NULL"
+            ))
 
         # 0. Seed Users
         print("Seeding users...")
