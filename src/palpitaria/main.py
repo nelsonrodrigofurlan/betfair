@@ -22,10 +22,10 @@ from palpitaria.services.analyzer import (
     count_teams_with_profiles,
     count_today_fixtures,
     count_upcoming_fixtures,
-    default_match_context,
     get_today_context,
     persist_analysis,
 )
+from palpitaria.services.match_context_utils import default_match_context
 from palpitaria.services.explainer import explain_analysis, refine_best_pick
 from palpitaria.services.football_data_client import FootballDataClient, FootballDataError
 from palpitaria.services.ingest import build_team_profiles, ingest_world_cup, localize_existing_teams

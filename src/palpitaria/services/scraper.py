@@ -4,6 +4,7 @@ import json
 
 from sqlalchemy.orm import Session
 
+from palpitaria.services.llm_client import chat_completion
 from palpitaria.services.match_context_utils import default_match_context
 from palpitaria.services.llm_utils import _parse_json_from_llm
 from palpitaria.services.team_names import english_team_name
