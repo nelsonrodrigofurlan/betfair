@@ -101,6 +101,7 @@ def admin_required(request: Request, user=Depends(login_required)):
 def on_startup() -> None:
     if settings.database_config_error:
         print(f"AVISO: {settings.database_config_error}", flush=True)
+        return
     try:
         init_db()
         from palpitaria.database import SessionLocal
@@ -116,13 +117,13 @@ def on_startup() -> None:
         msg = str(exc).lower()
         if "translate host" in msg or "getaddrinfo" in msg or "ipv6" in msg or "unreachable" in msg:
             print(
-                "\nERRO: não foi possível conectar ao Supabase.\n"
+                "\nAVISO: não foi possível conectar ao Supabase no startup.\n"
                 "Causa provável: DATABASE_URL usa db.PROJECT.supabase.co (só IPv6).\n"
                 "Solução: no Supabase Dashboard → Database → Connection pooling → Session,\n"
-                "copie a URL do pooler (aws-*-REGION.pooler.supabase.com) para DATABASE_URL no .env\n",
+                "copie a URL do pooler (aws-*-REGION.pooler.supabase.com) para DATABASE_URL.\n",
                 flush=True,
             )
-        raise
+        print(f"AVISO: startup do banco falhou ({exc!r}) — app sobe em modo degradado.", flush=True)
 
 
 def _render_home(request: Request, db: Session, comp_code: str | None = None) -> HTMLResponse:
@@ -766,6 +767,12 @@ def admin_toggle_competition(comp_id: int, db: Session = Depends(get_db), user=D
         comp.is_active = not comp.is_active
         db.commit()
     return RedirectResponse(url="/admin/config", status_code=303)
+
+
+@app.get("/health/live")
+def health_live() -> dict:
+    """Liveness — Cloud Run só precisa saber que o processo escutou na porta."""
+    return {"status": "ok"}
 
 
 @app.get("/health")

@@ -8,7 +8,8 @@ COPY src ./src
 RUN pip install --no-cache-dir .
 
 ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "exec uvicorn palpitaria.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "exec python -m uvicorn palpitaria.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips='*'"]
