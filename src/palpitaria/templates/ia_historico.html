@@ -37,7 +37,13 @@
   function toggleIaPanel(el) {
     const panel = el.closest('.ia-panel');
     if (!panel) return;
-    panel.classList.toggle('collapsed');
+    const wasCollapsed = panel.classList.contains('collapsed');
+    document.querySelectorAll('.ia-panel').forEach(function(p) {
+      p.classList.add('collapsed');
+    });
+    if (wasCollapsed) {
+      panel.classList.remove('collapsed');
+    }
   }
   document.getElementById('mes-filter').addEventListener('change', applyIaFilters);
   document.getElementById('comp-filter').addEventListener('change', applyIaFilters);
@@ -46,7 +52,7 @@
 <h2 style="font-size: 1.05rem; margin: 0 0 1rem; color: var(--blue);">{{ selected_period }}</h2>
 
 <!-- HOMOLOGADAS -->
-<div class="card ia-panel" style="margin-bottom: 1.5rem;">
+<div class="card ia-panel collapsed" style="margin-bottom: 1.5rem;">
   <div class="card-header" onclick="toggleIaPanel(this)">
     <div style="display: flex; flex-direction: column; gap: 0.35rem; flex: 1;">
       <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
