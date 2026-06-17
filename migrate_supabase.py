@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent / "src"))
 
 from palpitaria.database import Base
-from palpitaria.models import Team, Fixture, TeamProfile, Branch, User, UserInsight, Competition, ApiConfig
+from palpitaria.models import Team, Fixture, TeamProfile, Branch, User, UserInsight, Competition, ApiConfig, Cycle, CycleStep
 from palpitaria.config import settings
 from palpitaria.services.auth import get_password_hash
 

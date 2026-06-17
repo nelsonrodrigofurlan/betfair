@@ -245,3 +245,37 @@ class ApiConfig(Base):
     value: Mapped[str] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Cycle(Base):
+    __tablename__ = "cycles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(60))  # ex: "Ciclo 1"
+    initial_stake: Mapped[float] = mapped_column(Float)
+    target_amount: Mapped[float] = mapped_column(Float)
+    current_amount: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(20), default="ACTIVE")  # ACTIVE, COMPLETED, FAILED
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship()
+    steps: Mapped[list["CycleStep"]] = relationship(back_populates="cycle", cascade="all, delete-orphan")
+
+
+class CycleStep(Base):
+    __tablename__ = "cycle_steps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cycle_id: Mapped[int] = mapped_column(ForeignKey("cycles.id"), index=True)
+    fixture_id: Mapped[int | None] = mapped_column(ForeignKey("fixtures.id"), nullable=True)
+    description: Mapped[str] = mapped_column(String(200))
+    stake: Mapped[float] = mapped_column(Float)
+    target_profit_pct: Mapped[float] = mapped_column(Float, default=5.0)
+    actual_profit_loss: Mapped[float] = mapped_column(Float, default=0.0)
+    outcome: Mapped[str] = mapped_column(String(20), default="PENDING")  # WIN, LOSS, PENDING
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    cycle: Mapped["Cycle"] = relationship(back_populates="steps")
+    fixture: Mapped["Fixture | None"] = relationship()

@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}Ciclos — Palpitaria FC{% endblock %}
+{% block content %}
+<header style="margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+      <h1>🔄 Ciclos de Alavancagem</h1>
+      <p class="sub">Gestão agressiva com juros compostos · <strong>Mês ativo: {{ current_period }}</strong></p>
+    </div>
+    <button type="button" class="help-btn" onclick="showCycleHelp()" style="width: 32px; height: 32px; font-size: 1.2rem;">?</button>
+  </div>
+</header>
+
+<script>
+  function showCycleHelp() {
+    const info = {
+      title: 'O que é o Método de Ciclos?',
+      content: `
+        <p>O Método de Ciclos é uma estratégia de <strong>alavancagem de banca</strong> focada em juros compostos.</p>
+        <ul style="padding-left: 1.25rem; margin: 1rem 0;">
+          <li><strong>Objetivo:</strong> Sair de uma banca pequena e chegar a uma banca de trabalho sólida (ex: dobrar o capital).</li>
+          <li><strong>Aposta:</strong> Você usa a banca atual do ciclo como stake para a próxima entrada.</li>
+          <li><strong>Meta por jogo:</strong> O foco não é o gol, mas um lucro percentual (ex: 5%). Assim que o mercado valoriza e bate a meta, você faz o <em>Cash Out</em>.</li>
+          <li><strong>Redutor:</strong> A meta percentual diminui levemente a cada acerto para proteger o emocional conforme a stake cresce.</li>
+          <li><strong>Risco:</strong> Um único Red quebra o ciclo e exige recomeçar da base. Por isso, nunca use sua banca total aqui, apenas uma fatia.</li>
+        </ul>
+        <p style="font-size: 0.85rem; color: var(--muted);"><em>Dica: Use os <strong>Achados</strong> da Palpitaria para escolher jogos com alta probabilidade de gol ou estabilidade defensiva.</em></p>
+      `
+    };
+    document.getElementById('didactic-title').textContent = info.title;
+    document.getElementById('didactic-content').innerHTML = info.content;
+    document.getElementById('modal-overlay').style.display = 'block';
+    document.getElementById('didactic-modal').style.display = 'flex';
+    document.body.classList.add('modal-open');
+  }
+</script>
+
+{% if not active_cycle %}
+<div class="card" style="max-width: 500px; margin: 0 auto; text-align: center; padding: 3rem 2rem;">
+  <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
+  <h2>Iniciar Nova Jornada</h2>
+  <p style="color: var(--muted); margin-bottom: 2rem;">Você não tem nenhum ciclo ativo no momento. Defina seu capital inicial para começar.</p>
+  
+  <form action="/ciclos/start" method="POST" style="display: flex; flex-direction: column; gap: 1rem;">
+    <div style="text-align: left;">
+      <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem;">Nome do Ciclo</label>
+      <input type="text" name="name" value="Ciclo 1" required style="width: 100%; padding: 0.75rem; border-radius: 12px; border: 1px solid #cbd5e1;">
+    </div>
+    <div style="text-align: left;">
+      <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem;">Capital Inicial (R$)</label>
+      <input type="number" step="0.01" name="initial_stake" value="100.00" required style="width: 100%; padding: 0.75rem; border-radius: 12px; border: 1px solid #cbd5e1;">
+    </div>
+    <button type="submit" style="width: 100%; padding: 1rem; font-size: 1rem; margin-top: 1rem;">Criar Ciclo</button>
+  </form>
+</div>
+{% else %}
+
+<div style="display: grid; grid-template-columns: 1fr 350px; gap: 2rem; align-items: start;">
+  <!-- LADO ESQUERDO: CICLO ATIVO -->
+  <div>
+    <div class="card" style="border-left: 6px solid var(--blue); position: relative; overflow: hidden;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <div>
+          <h2 style="margin: 0; border: none; padding: 0; color: var(--blue);">{{ active_cycle.name }}</h2>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--muted);">Iniciado em {{ active_cycle.created_at.strftime('%d/%m/%Y') }}</p>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 1.75rem; font-weight: 800; color: var(--text);">R$ {{ "%.2f"|format(active_cycle.current_amount) }}</div>
+          <div style="font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase;">Banca Atual</div>
+        </div>
+      </div>
+
+      <!-- BARRA DE PROGRESSO -->
+      {% set progress = ((active_cycle.current_amount - active_cycle.initial_stake) / (active_cycle.target_amount - active_cycle.initial_stake) * 100) | round | int %}
+      {% if progress < 0 %}{% set progress = 0 %}{% endif %}
+      {% if progress > 100 %}{% set progress = 100 %}{% endif %}
+      <div style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 800; margin-bottom: 0.5rem; color: var(--muted);">
+          <span>BASE: R$ {{ "%.2f"|format(active_cycle.initial_stake) }}</span>
+          <span>META: R$ {{ "%.2f"|format(active_cycle.target_amount) }}</span>
+        </div>
+        <div style="height: 12px; background: #e2e8f0; border-radius: 6px; overflow: hidden;">
+          <div style="width: {{ progress }}%; height: 100%; background: var(--blue); transition: width 0.5s ease-out;"></div>
+        </div>
+        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.85rem; font-weight: 700; color: var(--blue);">{{ progress }}% concluído</div>
+      </div>
+
+      <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 1.5rem 0;">
+
+      <!-- PRÓXIMA ENTRADA -->
+      <div style="background: #f8fafc; padding: 1.25rem; border-radius: 16px; border: 1px solid #e2e8f0;">
+        <h3 style="margin-top: 0; font-size: 0.9rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Calculadora de Próxima Entrada</h3>
+        <div style="display: flex; gap: 2rem; margin-top: 1rem; align-items: center;">
+          <div>
+            <div style="font-size: 1.25rem; font-weight: 800;">R$ {{ "%.2f"|format(active_cycle.current_amount) }}</div>
+            <div style="font-size: 0.7rem; color: var(--muted); font-weight: 600;">STAKE (100%)</div>
+          </div>
+          <div style="font-size: 1.5rem; color: #cbd5e1;">➔</div>
+          <div>
+            <div style="font-size: 1.25rem; font-weight: 800; color: var(--green);">{{ next_target_pct }}%</div>
+            <div style="font-size: 0.7rem; color: var(--muted); font-weight: 600;">META DE LUCRO</div>
+          </div>
+          <div style="margin-left: auto;">
+             <div style="font-size: 1.25rem; font-weight: 800; color: var(--green);">+ R$ {{ "%.2f"|format(active_cycle.current_amount * (next_target_pct / 100)) }}</div>
+             <div style="font-size: 0.7rem; color: var(--muted); font-weight: 600;">LUCRO ESPERADO</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LISTA DE PASSOS -->
+    <div class="card">
+      <h2 style="margin-top: 0;">Histórico do Ciclo</h2>
+      {% if active_cycle.steps %}
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Jogo/Descrição</th>
+              <th>Stake</th>
+              <th>Meta %</th>
+              <th>Status</th>
+              <th>P&L</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for step in active_cycle.steps | sort(attribute='created_at', reverse=True) %}
+            <tr>
+              <td style="font-size: 0.8rem; color: var(--muted);">{{ step.created_at.strftime('%d/%m %H:%M') }}</td>
+              <td><strong>{{ step.description }}</strong></td>
+              <td>R$ {{ "%.2f"|format(step.stake) }}</td>
+              <td>{{ step.target_profit_pct }}%</td>
+              <td>
+                {% if step.outcome == 'PENDING' %}
+                <div style="display: flex; gap: 0.5rem;">
+                  <form action="/ciclos/step/resolve/{{ step.id }}" method="POST">
+                    <input type="hidden" name="outcome" value="WIN">
+                    <button type="submit" class="badge ok" style="border: none; cursor: pointer; padding: 0.4rem 0.8rem;">✅ GREEN</button>
+                  </form>
+                  <form action="/ciclos/step/resolve/{{ step.id }}" method="POST" onsubmit="return confirm('O RED quebra o ciclo e zera a banca. Confirmar?')">
+                    <input type="hidden" name="outcome" value="LOSS">
+                    <button type="submit" class="badge err" style="border: none; cursor: pointer; padding: 0.4rem 0.8rem;">❌ RED</button>
+                  </form>
+                </div>
+                {% elif step.outcome == 'WIN' %}
+                <span class="badge ok">GREEN</span>
+                {% else %}
+                <span class="badge err">RED</span>
+                {% endif %}
+              </td>
+              <td class="{% if step.outcome == 'WIN' %}pass{% elif step.outcome == 'LOSS' %}fail{% endif %}">
+                {% if step.outcome == 'PENDING' %}—{% else %}R$ {{ "%.2f"|format(step.actual_profit_loss) }}{% endif %}
+              </td>
+              <td style="text-align: right;">
+                <form action="/ciclos/step/delete/{{ step.id }}" method="POST" onsubmit="return confirm('Excluir esta entrada do histórico?')">
+                  <button type="submit" style="background: none; border: none; color: #cbd5e1; cursor: pointer; padding: 0; font-size: 0.9rem;" title="Excluir entrada">✕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p style="color: var(--muted); text-align: center; padding: 2rem;">Nenhuma entrada registrada ainda.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- LADO DIREITO: SUGESTÕES E AÇÕES -->
+  <aside>
+    <div class="card" style="padding: 1.25rem;">
+      <h3 style="margin-top: 0; font-size: 1rem;">Lançar Próxima</h3>
+      <form action="/ciclos/step/add" method="POST" style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <input type="text" name="description" placeholder="Jogo (ex: Brasil x Sérvia)" required style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #cbd5e1;">
+        <button type="submit" class="secondary" style="width: 100%;">Registrar Entrada</button>
+      </form>
+    </div>
+
+    {% if suggestions %}
+    <div class="card" style="padding: 1.25rem; background: #fffbeb; border-color: #fde68a;">
+      <h3 style="margin-top: 0; font-size: 0.9rem; color: #92400e; display: flex; align-items: center; gap: 0.4rem;">
+        🎯 Sugestões de Hoje
+      </h3>
+      <p style="font-size: 0.75rem; color: #b45309; margin-bottom: 1rem;">Jogos com alta pontuação no filtro Over:</p>
+      <div style="display: grid; gap: 0.75rem;">
+        {% for a in suggestions %}
+        <div style="background: white; padding: 0.75rem; border-radius: 10px; border: 1px solid #fde68a; font-size: 0.85rem;">
+          <div style="font-weight: 700; margin-bottom: 0.25rem;">{{ a.home_name }} x {{ a.away_name }}</div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="badge ok" style="font-size: 0.6rem;">Score: {{ "%.1f"|format(a.goal_potential_score * 10) }}</span>
+            <form action="/ciclos/step/add" method="POST" style="margin: 0;">
+              <input type="hidden" name="description" value="{{ a.home_name }} x {{ a.away_name }}">
+              <input type="hidden" name="fixture_id" value="{{ a.fixture_id }}">
+              <button type="submit" style="background: none; border: none; color: var(--blue); padding: 0; font-size: 0.75rem; font-weight: 800; cursor: pointer;">Usar ➔</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 2rem; text-align: center;">
+      <form action="/ciclos/delete/{{ active_cycle.id }}" method="POST" onsubmit="return confirm('Deseja realmente excluir este ciclo? Todo o progresso será perdido.')">
+        <button type="submit" style="background: none; border: none; color: #94a3b8; font-size: 0.75rem; text-decoration: underline; cursor: pointer;">Excluir Ciclo Atual</button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+{% endif %}
+
+{% if past_cycles %}
+<section style="margin-top: 3rem;">
+  <h2 style="font-size: 1rem; color: var(--muted);">Últimas Jornadas</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Início</th>
+          <th>Base</th>
+          <th>Meta</th>
+          <th>Final</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in past_cycles %}
+        <tr>
+          <td><strong>{{ c.name }}</strong></td>
+          <td style="font-size: 0.8rem; color: var(--muted);">{{ c.created_at.strftime('%d/%m/%Y') }}</td>
+          <td>R$ {{ "%.2f"|format(c.initial_stake) }}</td>
+          <td>R$ {{ "%.2f"|format(c.target_amount) }}</td>
+          <td>R$ {{ "%.2f"|format(c.current_amount) }}</td>
+          <td>
+            {% if c.status == 'COMPLETED' %}<span class="badge ok">CONCLUÍDO</span>
+            {% else %}<span class="badge err">QUEBROU</span>{% endif %}
+          </td>
+          <td>
+             <form action="/ciclos/delete/{{ c.id }}" method="POST" onsubmit="return confirm('Excluir histórico deste ciclo?')">
+               <button type="submit" style="background:none; border:none; color:#cbd5e1; cursor:pointer;">✕</button>
+             </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}
