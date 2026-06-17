@@ -47,6 +47,9 @@ def migrate_to_supabase():
             ))
             # New columns for Auth
             conn.execute(text(
+                "ALTER TABLE branches DROP CONSTRAINT IF EXISTS branches_name_key"
+            ))
+            conn.execute(text(
                 "ALTER TABLE branches ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)"
             ))
             conn.execute(text(

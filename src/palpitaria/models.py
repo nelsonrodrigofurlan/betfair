@@ -158,8 +158,8 @@ class Branch(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
-    name: Mapped[str] = mapped_column(String(60), unique=True)
-    slug: Mapped[str] = mapped_column(String(30), unique=True)
+    name: Mapped[str] = mapped_column(String(60))
+    slug: Mapped[str] = mapped_column(String(60), unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     commission_rate: Mapped[float] = mapped_column(Float, default=6.5)  # % de comissão (ex: 6.5)
 
