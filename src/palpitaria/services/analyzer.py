@@ -367,21 +367,17 @@ def _team_form_block(meta: dict, team_label: str) -> dict:
             "calc_note": None,
         }
 
-    recent_lines = [m.get("line") or m.get("result", "—") for m in recent[:3]]
-    calc_note = None
-    if sampled > len(recent):
-        calc_note = f"Médias calculadas com {sampled} jogos no total."
-    elif calc and len(calc) <= 5:
-        calc_note = "Base do cálculo:"
-        calc_lines = [m.get("line") or m.get("result", "—") for m in calc]
-        return {
-            "team": team_label,
-            "recent": recent_lines,
-            "calc_note": calc_note,
-            "calc_lines": calc_lines,
-        }
+    # Se temos poucos jogos na base de cálculo, usamos eles direto (mais preciso)
+    # Caso contrário, usamos os 3 mais recentes.
+    if calc and len(calc) <= 5:
+        display_matches = calc
+        calc_note = "Jogos usados no cálculo:"
+    else:
+        display_matches = recent[:3]
+        calc_note = f"Média baseada em {sampled} jogos." if sampled > 3 else None
 
-    return {"team": team_label, "recent": recent_lines, "calc_note": calc_note}
+    lines = [m.get("line") or m.get("result", "—") for m in display_matches]
+    return {"team": team_label, "recent": lines, "calc_note": calc_note}
 
 
 def build_criteria_brief(analysis: FixtureAnalysis) -> dict:
@@ -410,25 +406,10 @@ def build_criteria_brief(analysis: FixtureAnalysis) -> dict:
     avg_btts = (float(home["both_teams_score_rate"]) + float(away["both_teams_score_rate"])) / 2
 
     lines = [
-        (
-            f"Média combinada {_fmt_num(combined)} g/j — "
-            f"{hn} {_fmt_num(home['avg_goals_scored'])} mar / {_fmt_num(home['avg_goals_conceded'])} lev · "
-            f"{an} {_fmt_num(away['avg_goals_scored'])} mar / {_fmt_num(away['avg_goals_conceded'])} lev"
-        ),
-        (
-            f"0-0 — {_fmt_pct(home['zero_zero_rate'])} ({hn}) · {_fmt_pct(away['zero_zero_rate'])} ({an}) "
-            f"→ pior {_fmt_pct(worst_00)}"
-        ),
-        (
-            f"Over 0,5 — {_fmt_pct(home['over_05_rate'])} ({hn}) · {_fmt_pct(away['over_05_rate'])} ({an}) "
-            f"→ menor {_fmt_pct(min_o05)}"
-        ),
-        (
-            f"Ambas marcam — {_fmt_pct(home['both_teams_score_rate'])} ({hn}) · "
-            f"{_fmt_pct(away['both_teams_score_rate'])} ({an}) → média {_fmt_pct(avg_btts)}"
-        ),
-        f"Ofensiva {hn}: {_fmt_num(home['avg_goals_scored'])} g/j · {_profile_source_label(home)}",
-        f"Ofensiva {an}: {_fmt_num(away['avg_goals_scored'])} g/j · {_profile_source_label(away)}",
+        f"Média de gols: {_fmt_num(combined)} por jogo (expectativa combinada).",
+        f"Risco de 0-0: {_fmt_pct(worst_00)} (baseado no pior histórico entre os dois).",
+        f"Chance de gol (Over 0.5): {_fmt_pct(min_o05)} (frequência mínima garantida).",
+        f"Ambas marcam: {_fmt_pct(avg_btts)} dos jogos (tendência mútua).",
     ]
 
     total = len(analysis.criteria)
@@ -439,18 +420,16 @@ def build_criteria_brief(analysis: FixtureAnalysis) -> dict:
     if not total:
         verdict = "Critérios ainda não calculados."
     elif failed:
-        verdict = f"{passed}/{total} OK · {strong} ótimos · gap: {failed[0]}"
-        if len(failed) > 1:
-            verdict = f"{passed}/{total} OK · {strong} ótimos · {len(failed)} gap(s)"
+        verdict = f"Resultado: {passed}/{total} aprovados ({strong} acima da média)."
     else:
-        verdict = f"{passed}/{total} OK · {strong} ótimos — passou no filtro Over"
+        verdict = f"Resultado: {passed}/{total} aprovados — leitura sólida para Over."
 
     home_insights = (analysis.home_insights or {}).get("key_insights") or []
     away_insights = (analysis.away_insights or {}).get("key_insights") or []
 
     return {
         "match": match,
-        "base": f"Base: {_profile_source_label(home)} | {_profile_source_label(away)}",
+        "base": f"Fontes: {_profile_source_label(home)} | {_profile_source_label(away)}",
         "lines": lines,
         "verdict": verdict,
         "home_form": _team_form_block(home, hn),
