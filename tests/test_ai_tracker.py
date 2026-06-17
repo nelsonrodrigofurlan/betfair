@@ -1,6 +1,12 @@
 import pytest
 
-from palpitaria.services.ai_tracker import compute_accuracy_stats, evaluate_market, normalize_market
+from palpitaria.services.ai_tracker import (
+    compute_accuracy_stats,
+    compute_split_stats,
+    evaluate_market,
+    normalize_market,
+    normalize_market_group,
+)
 
 
 @pytest.mark.parametrize(
@@ -20,6 +26,32 @@ from palpitaria.services.ai_tracker import compute_accuracy_stats, evaluate_mark
 )
 def test_evaluate_market(market, home, away, hs, as_, expected):
     assert evaluate_market(market, home_name=home, away_name=away, home_score=hs, away_score=as_) == expected
+
+
+def test_normalize_market_group_vitoria():
+    assert normalize_market_group("VITÓRIA: Argentina") == "VITÓRIA"
+    assert normalize_market_group("VITORIA: Portugal") == "VITÓRIA"
+
+
+def test_compute_split_stats_separates_homologated():
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    recs = [
+        SimpleNamespace(
+            fixture_id=1, analyzed_at=datetime(2026, 6, 10), excluded=False,
+            outcome="HIT", market="OVER 1.5 GOALS",
+        ),
+        SimpleNamespace(
+            fixture_id=2, analyzed_at=datetime(2026, 6, 11), excluded=True,
+            outcome="MISS", market="VITÓRIA: Inglaterra",
+        ),
+    ]
+    split = compute_split_stats(recs)
+    assert split["homologated"]["hits"] == 1
+    assert split["homologated"]["misses"] == 0
+    assert split["alternate"]["misses"] == 1
+    assert "VITÓRIA" in split["alternate"]["by_market"]
 
 
 def test_compute_accuracy_stats_dedupes_by_fixture():

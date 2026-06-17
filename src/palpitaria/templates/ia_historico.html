@@ -5,172 +5,273 @@
   <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
     <div>
       <h1>🤖 Histórico da IA</h1>
-      <p class="sub">Track record da recomendação — separado do P&L manual das filiais</p>
+      <p class="sub">Track record separado: homologadas (candidatos) vs alternativas</p>
     </div>
-    <div style="display: flex; align-items: center; gap: 1rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
-      <span style="font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Campeonato:</span>
-      <select name="comp" onchange="window.location.href='/ia-historico?comp=' + this.value" style="border: none; background: transparent; font-weight: 700; color: var(--blue); cursor: pointer; font-size: 1rem; outline: none;">
-        {% for comp in active_comps %}
-          <option value="{{ comp.code }}" {% if current_comp == comp.code %}selected{% endif %}>{{ comp.name }}</option>
-        {% endfor %}
-      </select>
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
+        <span style="font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase;">Mês:</span>
+        <select id="mes-filter" style="border: none; background: transparent; font-weight: 700; color: var(--blue); cursor: pointer; font-size: 0.95rem; outline: none;">
+          {% for opt in month_options %}
+            <option value="{{ opt.value }}" {% if opt.value == selected_mes %}selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
+        <span style="font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase;">Comp:</span>
+        <select id="comp-filter" style="border: none; background: transparent; font-weight: 700; color: var(--blue); cursor: pointer; font-size: 0.95rem; outline: none;">
+          {% for comp in active_comps %}
+            <option value="{{ comp.code }}" {% if current_comp == comp.code %}selected{% endif %}>{{ comp.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
   </div>
 </header>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-  <div class="card" style="text-align: center; padding: 1rem;">
-    <div style="font-size: 1.75rem; font-weight: 800; color: var(--blue);">{{ stats.resolved }}</div>
-    <div style="font-size: 0.75rem; color: var(--muted); font-weight: 600;">Resolvidas</div>
-  </div>
-  <div class="card" style="text-align: center; padding: 1rem; background: #f0fdf4; border-color: #bbf7d0;">
-    <div style="font-size: 1.75rem; font-weight: 800; color: var(--green);">{{ stats.hits }}</div>
-    <div style="font-size: 0.75rem; color: var(--muted); font-weight: 600;">Acertos</div>
-  </div>
-  <div class="card" style="text-align: center; padding: 1rem; background: #fef2f2; border-color: #fecaca;">
-    <div style="font-size: 1.75rem; font-weight: 800; color: #dc2626;">{{ stats.misses }}</div>
-    <div style="font-size: 0.75rem; color: var(--muted); font-weight: 600;">Erros</div>
-  </div>
-  <div class="card" style="text-align: center; padding: 1rem;">
-    <div style="font-size: 1.75rem; font-weight: 800; color: var(--blue);">
-      {% if stats.hit_rate_pct is not none %}{{ stats.hit_rate_pct }}%{% else %}—{% endif %}
+<script>
+  function applyIaFilters() {
+    const mes = document.getElementById('mes-filter').value;
+    const comp = document.getElementById('comp-filter').value;
+    window.location.href = '/ia-historico?comp=' + comp + '&mes=' + mes;
+  }
+  function toggleIaPanel(el) {
+    const panel = el.closest('.ia-panel');
+    if (!panel) return;
+    panel.classList.toggle('collapsed');
+  }
+  document.getElementById('mes-filter').addEventListener('change', applyIaFilters);
+  document.getElementById('comp-filter').addEventListener('change', applyIaFilters);
+</script>
+
+<h2 style="font-size: 1.05rem; margin: 0 0 1rem; color: var(--blue);">{{ selected_period }}</h2>
+
+<!-- HOMOLOGADAS -->
+<div class="card ia-panel" style="margin-bottom: 1.5rem;">
+  <div class="card-header" onclick="toggleIaPanel(this)">
+    <div style="display: flex; flex-direction: column; gap: 0.35rem; flex: 1;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <span class="badge ok">Homologadas</span>
+        <span style="font-weight: 700; font-size: 0.95rem;">Candidatos ao show</span>
+      </div>
+      <span style="font-weight: 500; color: var(--muted); font-size: 0.85rem;">Entradas que o filtro aprovou</span>
     </div>
-    <div style="font-size: 0.75rem; color: var(--muted); font-weight: 600;">Acerto geral</div>
-  </div>
-  <div class="card" style="text-align: center; padding: 1rem; background: #fffbeb; border-color: #fde68a;">
-    <div style="font-size: 1.75rem; font-weight: 800; color: #b45309;">{{ stats.pending }}</div>
-    <div style="font-size: 0.75rem; color: var(--muted); font-weight: 600;">Pendentes</div>
-  </div>
-</div>
-
-{% if summary_months %}
-<div class="card" style="margin-bottom: 1.5rem;">
-  <h2 style="margin: 0 0 1rem; font-size: 1rem;">Resumo por mês</h2>
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Mês</th>
-          <th>Jogos</th>
-          <th>Resolvidas</th>
-          <th>Acertos</th>
-          <th>Erros</th>
-          <th>Pendentes</th>
-          <th>% acerto</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for m in summary_months %}
-        <tr>
-          <td><strong>{{ m.period }}</strong></td>
-          <td>{{ m.total }}</td>
-          <td>{{ m.resolved }}</td>
-          <td class="pass">{{ m.hits }}</td>
-          <td class="fail">{{ m.misses }}</td>
-          <td>{{ m.pending }}</td>
-          <td>{% if m.hit_rate_pct is not none %}<strong>{{ m.hit_rate_pct }}%</strong>{% else %}—{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
-
-{% if market_rows %}
-<div class="card" style="margin-bottom: 1.5rem;">
-  <h2 style="margin: 0 0 1rem; font-size: 1rem;">Por mercado (geral)</h2>
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Mercado</th>
-          <th>Total</th>
-          <th>Acertos</th>
-          <th>Erros</th>
-          <th>% acerto</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for m in market_rows %}
-        <tr>
-          <td><strong>{{ m.market }}</strong></td>
-          <td>{{ m.total }}</td>
-          <td class="pass">{{ m.hit }}</td>
-          <td class="fail">{{ m.miss }}</td>
-          <td>{% if m.hit_rate_pct is not none %}{{ m.hit_rate_pct }}%{% else %}—{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
-
-{% if month_blocks %}
-  {% for block in month_blocks %}
-  <section style="margin-bottom: 2rem;">
-    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-      <h2 style="margin: 0; font-size: 1.1rem;">{{ block.period }}</h2>
-      <span style="font-size: 0.85rem; color: var(--muted); font-weight: 600;">
-        {{ block.stats.hits }} acertos · {{ block.stats.misses }} erros
-        {% if block.stats.hit_rate_pct is not none %} · <strong style="color: var(--blue);">{{ block.stats.hit_rate_pct }}%</strong>{% endif %}
-        {% if block.stats.pending %} · {{ block.stats.pending }} pendente(s){% endif %}
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <span style="font-size: 0.85rem; color: var(--muted); font-weight: 600; white-space: nowrap;">
+        <span class="pass">{{ homologated.hits }}✓</span>
+        · <span class="fail">{{ homologated.misses }}✗</span>
+        {% if homologated.hit_rate_pct is not none %} · <strong style="color: var(--blue);">{{ homologated.hit_rate_pct }}%</strong>{% endif %}
+        {% if homologated.pending %} · <span style="color: #b45309;">{{ homologated.pending }} pend.</span>{% endif %}
       </span>
+      <span class="toggle-icon">▼</span>
     </div>
+  </div>
+
+  <div class="card-content" style="margin-top: 1.25rem;">
+    <div class="ia-stat-grid">
+      <div class="ia-stat-box">
+        <div class="ia-stat-value" style="color: var(--blue);">{{ homologated.resolved }}</div>
+        <div class="ia-stat-label">Resolvidas</div>
+      </div>
+      <div class="ia-stat-box ia-stat-ok">
+        <div class="ia-stat-value" style="color: var(--green);">{{ homologated.hits }}</div>
+        <div class="ia-stat-label">Acertos</div>
+      </div>
+      <div class="ia-stat-box ia-stat-fail">
+        <div class="ia-stat-value" style="color: #dc2626;">{{ homologated.misses }}</div>
+        <div class="ia-stat-label">Erros</div>
+      </div>
+      <div class="ia-stat-box">
+        <div class="ia-stat-value" style="color: var(--blue);">
+          {% if homologated.hit_rate_pct is not none %}{{ homologated.hit_rate_pct }}%{% else %}—{% endif %}
+        </div>
+        <div class="ia-stat-label">% acerto</div>
+      </div>
+      <div class="ia-stat-box ia-stat-pending">
+        <div class="ia-stat-value" style="color: #b45309;">{{ homologated.pending }}</div>
+        <div class="ia-stat-label">Pendentes</div>
+      </div>
+    </div>
+
+    {% if homologated_market_rows %}
+    <div style="margin: 1rem 0; padding: 1rem; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <h4 style="margin: 0 0 0.75rem; font-size: 0.9rem;">Por mercado</h4>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr><th>Mercado</th><th>Total</th><th>Acertos</th><th>Erros</th><th>%</th></tr>
+          </thead>
+          <tbody>
+            {% for m in homologated_market_rows %}
+            <tr>
+              <td><strong>{{ m.market }}</strong></td>
+              <td>{{ m.total }}</td>
+              <td class="pass">{{ m.hit }}</td>
+              <td class="fail">{{ m.miss }}</td>
+              <td>{% if m.hit_rate_pct is not none %}{{ m.hit_rate_pct }}%{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if homologated_rows %}
     <div class="table-container">
       <table>
         <thead>
-          <tr>
-            <th>Data</th>
-            <th>Jogo</th>
-            <th>Mercado</th>
-            <th>Tipo</th>
-            <th>Placar</th>
-            <th>Resultado</th>
-          </tr>
+          <tr><th>Data</th><th>Jogo</th><th>Mercado</th><th>Veredito</th><th>Placar</th><th></th></tr>
         </thead>
         <tbody>
-          {% for row in block.rows %}
+          {% for row in homologated_rows %}
           <tr>
             <td style="font-size: 0.85rem; color: var(--muted); white-space: nowrap;">{{ row.analyzed_at | kickoff(app_timezone) }}</td>
             <td><strong>{{ row.match_label }}</strong></td>
             <td>{{ row.market }}</td>
-            <td>
-              {% if row.excluded %}
-                <span class="badge warn" style="font-size: 0.65rem;">Alt.</span>
-              {% else %}
-                <span class="badge ok" style="font-size: 0.65rem;">Cand.</span>
-              {% endif %}
-              <span class="badge" style="font-size: 0.65rem; background: #e2e8f0; color: #475569;">{{ row.verdict }}</span>
-            </td>
+            <td><span class="badge" style="font-size: 0.65rem; background: #e2e8f0;">{{ row.verdict }}</span></td>
             <td>{{ row.score }}</td>
             <td>
-              {% if row.outcome == 'HIT' %}
-                <span class="pass" style="font-weight: 700;">✓</span>
-              {% elif row.outcome == 'MISS' %}
-                <span class="fail" style="font-weight: 700;">✗</span>
-              {% elif row.outcome == 'VOID' %}
-                <span style="color: var(--muted);">—</span>
-              {% else %}
-                <span style="color: #b45309; font-size: 0.85rem;">…</span>
-              {% endif %}
+              {% if row.outcome == 'HIT' %}<span class="pass" style="font-weight: 700;">✓</span>
+              {% elif row.outcome == 'MISS' %}<span class="fail" style="font-weight: 700;">✗</span>
+              {% elif row.outcome == 'PENDING' %}<span style="color: #b45309;">…</span>
+              {% else %}<span style="color: var(--muted);">—</span>{% endif %}
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </section>
-  {% endfor %}
-{% else %}
-<div class="card" style="text-align: center; color: var(--muted);">
-  <p>Nenhuma recomendação da IA registrada ainda.</p>
-  <p style="font-size: 0.85rem; margin-top: 0.5rem;">Rode o <strong>passo 3 — Gerar Leituras</strong> na home.</p>
+    {% else %}
+    <p style="color: var(--muted); font-size: 0.9rem; margin: 0;">Nenhuma homologada neste mês.</p>
+    {% endif %}
+  </div>
 </div>
-{% endif %}
 
-<p class="sub" style="margin-top: 1rem; font-size: 0.8rem;">
-  Uma leitura por jogo por dia. Placares conferidos no sync. Apostas reais em <a href="/branches">Filiais</a>.
+<!-- ALTERNATIVAS -->
+<div class="card ia-panel collapsed" style="margin-bottom: 2rem;">
+  <div class="card-header" onclick="toggleIaPanel(this)">
+    <div style="display: flex; flex-direction: column; gap: 0.35rem; flex: 1;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <span class="badge warn">Alternativas</span>
+        <span style="font-weight: 700; font-size: 0.95rem;">Fora do filtro de gols</span>
+      </div>
+      <span style="font-weight: 500; color: var(--muted); font-size: 0.85rem;">Referência — não obrigatório entrar</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <span style="font-size: 0.85rem; color: var(--muted); font-weight: 600; white-space: nowrap;">
+        <span class="pass">{{ alternate.hits }}✓</span>
+        · <span class="fail">{{ alternate.misses }}✗</span>
+        {% if alternate.hit_rate_pct is not none %} · <strong style="color: var(--blue);">{{ alternate.hit_rate_pct }}%</strong>{% endif %}
+        {% if alternate.pending %} · <span style="color: #b45309;">{{ alternate.pending }} pend.</span>{% endif %}
+      </span>
+      <span class="toggle-icon">▼</span>
+    </div>
+  </div>
+
+  <div class="card-content" style="margin-top: 1.25rem;">
+    <div class="ia-stat-grid">
+      <div class="ia-stat-box">
+        <div class="ia-stat-value" style="color: var(--blue);">{{ alternate.resolved }}</div>
+        <div class="ia-stat-label">Resolvidas</div>
+      </div>
+      <div class="ia-stat-box ia-stat-ok">
+        <div class="ia-stat-value" style="color: var(--green);">{{ alternate.hits }}</div>
+        <div class="ia-stat-label">Acertos</div>
+      </div>
+      <div class="ia-stat-box ia-stat-fail">
+        <div class="ia-stat-value" style="color: #dc2626;">{{ alternate.misses }}</div>
+        <div class="ia-stat-label">Erros</div>
+      </div>
+      <div class="ia-stat-box">
+        <div class="ia-stat-value" style="color: var(--blue);">
+          {% if alternate.hit_rate_pct is not none %}{{ alternate.hit_rate_pct }}%{% else %}—{% endif %}
+        </div>
+        <div class="ia-stat-label">% acerto</div>
+      </div>
+      <div class="ia-stat-box ia-stat-pending">
+        <div class="ia-stat-value" style="color: #b45309;">{{ alternate.pending }}</div>
+        <div class="ia-stat-label">Pendentes</div>
+      </div>
+    </div>
+
+    {% if alternate_market_rows %}
+    <div style="margin: 1rem 0; padding: 1rem; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <h4 style="margin: 0 0 0.75rem; font-size: 0.9rem;">Por mercado</h4>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr><th>Mercado</th><th>Total</th><th>Acertos</th><th>Erros</th><th>%</th></tr>
+          </thead>
+          <tbody>
+            {% for m in alternate_market_rows %}
+            <tr>
+              <td><strong>{{ m.market }}</strong></td>
+              <td>{{ m.total }}</td>
+              <td class="pass">{{ m.hit }}</td>
+              <td class="fail">{{ m.miss }}</td>
+              <td>{% if m.hit_rate_pct is not none %}{{ m.hit_rate_pct }}%{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if alternate_rows %}
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr><th>Data</th><th>Jogo</th><th>Mercado</th><th>Veredito</th><th>Placar</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for row in alternate_rows %}
+          <tr>
+            <td style="font-size: 0.85rem; color: var(--muted); white-space: nowrap;">{{ row.analyzed_at | kickoff(app_timezone) }}</td>
+            <td><strong>{{ row.match_label }}</strong></td>
+            <td>{{ row.market }}</td>
+            <td><span class="badge" style="font-size: 0.65rem; background: #e2e8f0;">{{ row.verdict }}</span></td>
+            <td>{{ row.score }}</td>
+            <td>
+              {% if row.outcome == 'HIT' %}<span class="pass" style="font-weight: 700;">✓</span>
+              {% elif row.outcome == 'MISS' %}<span class="fail" style="font-weight: 700;">✗</span>
+              {% elif row.outcome == 'PENDING' %}<span style="color: #b45309;">…</span>
+              {% else %}<span style="color: var(--muted);">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color: var(--muted); font-size: 0.9rem; margin: 0;">Nenhuma alternativa neste mês.</p>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .ia-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .ia-stat-box {
+    text-align: center;
+    padding: 0.85rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+  .ia-stat-ok { background: #f0fdf4; border-color: #bbf7d0; }
+  .ia-stat-fail { background: #fef2f2; border-color: #fecaca; }
+  .ia-stat-pending { background: #fffbeb; border-color: #fde68a; }
+  .ia-stat-value { font-size: 1.5rem; font-weight: 800; }
+  .ia-stat-label { font-size: 0.7rem; color: var(--muted); font-weight: 600; margin-top: 0.15rem; }
+</style>
+
+<p class="sub" style="font-size: 0.8rem;">
+  % de acerto usa a última leitura por jogo no mês. Apostas reais em <a href="/branches">Filiais</a>.
 </p>
 {% endblock %}

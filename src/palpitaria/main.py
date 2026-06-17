@@ -34,10 +34,13 @@ from palpitaria.services.wc_profile_web import enrich_today_team_profiles
 from palpitaria.services.chat_service import process_user_message
 from palpitaria.services.ai_tracker import (
     backfill_from_fixture_reports,
-    compute_accuracy_stats,
-    group_recommendations_by_month,
-    monthly_summary_rows,
+    build_month_options,
+    compute_split_stats,
+    filter_recommendations_by_month,
+    market_rows_from_stats,
+    parse_month_param,
     resolve_pending_recommendations,
+    rows_for_scope,
 )
 from palpitaria.services.ledger import bet_competition_expr, close_past_months, current_period, period_label
 from palpitaria.models import Fixture
@@ -538,7 +541,13 @@ def list_historico(request: Request, comp: str | None = None, db: Session = Depe
 
 
 @app.get("/ia-historico", response_class=HTMLResponse)
-def list_ia_historico(request: Request, comp: str | None = None, db: Session = Depends(get_db), user=Depends(login_required)):
+def list_ia_historico(
+    request: Request,
+    comp: str | None = None,
+    mes: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(login_required),
+):
     from palpitaria.models import AiRecommendation, Competition
 
     resolve_pending_recommendations(db, comp)
@@ -549,33 +558,30 @@ def list_ia_historico(request: Request, comp: str | None = None, db: Session = D
     query = db.query(AiRecommendation).order_by(AiRecommendation.analyzed_at.desc())
     if comp_code:
         query = query.filter(AiRecommendation.competition_code == comp_code)
-    recommendations = query.limit(200).all()
+    all_recommendations = query.limit(500).all()
 
-    stats = compute_accuracy_stats(recommendations)
-    month_blocks = group_recommendations_by_month(recommendations)
-    summary_months = monthly_summary_rows(recommendations)
+    month_options = build_month_options(all_recommendations)
+    year, month = parse_month_param(mes)
+    selected_mes = f"{year}-{month:02d}"
+    selected_period = period_label(year, month)
 
-    market_rows = []
-    for market, data in sorted(stats["by_market"].items(), key=lambda x: -x[1]["total"]):
-        market_rows.append(
-            {
-                "market": market,
-                "hit": data["hit"],
-                "miss": data["miss"],
-                "total": data["total"],
-                "hit_rate_pct": round(data["hit"] / data["total"] * 100) if data["total"] else None,
-            }
-        )
+    filtered = filter_recommendations_by_month(all_recommendations, year, month)
+    split = compute_split_stats(filtered)
 
     cy, cm = current_period()
     return TEMPLATES.TemplateResponse(
         request,
         "ia_historico.html",
         {
-            "stats": stats,
-            "market_rows": market_rows,
-            "summary_months": summary_months,
-            "month_blocks": month_blocks,
+            "homologated": split["homologated"],
+            "alternate": split["alternate"],
+            "homologated_market_rows": market_rows_from_stats(split["homologated"]),
+            "alternate_market_rows": market_rows_from_stats(split["alternate"]),
+            "homologated_rows": rows_for_scope(filtered, homologated=True),
+            "alternate_rows": rows_for_scope(filtered, homologated=False),
+            "month_options": month_options,
+            "selected_mes": selected_mes,
+            "selected_period": selected_period,
             "current_period": period_label(cy, cm),
             "app_timezone": settings.app_timezone,
             "active_comps": active_comps,

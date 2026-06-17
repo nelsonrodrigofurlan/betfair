@@ -29,6 +29,16 @@ def normalize_market(market: str) -> str:
     return (market or "").upper().replace(",", ".").strip()
 
 
+def normalize_market_group(market: str) -> str:
+    """Agrupa mercados para estatística — ex.: VITÓRIA: Portugal → VITÓRIA."""
+    m = normalize_market(market)
+    if m.startswith("VITÓRIA:") or m.startswith("VITORIA:"):
+        return "VITÓRIA"
+    if m.startswith("LAY CORRECT SCORE:"):
+        return "LAY CORRECT SCORE"
+    return market.strip()
+
+
 def _team_won(picked: str, home_name: str, away_name: str, home_score: int, away_score: int) -> bool:
     picked_n = _norm_name(picked)
     home_n = _norm_name(home_name)
@@ -211,10 +221,21 @@ def backfill_from_fixture_reports(db: Session) -> int:
     return created
 
 
-def compute_accuracy_stats(recommendations: list[AiRecommendation]) -> dict:
-    """Métricas sobre lista já filtrada (usa última por fixture para evitar dupla contagem)."""
+def compute_accuracy_stats(
+    recommendations: list[AiRecommendation],
+    *,
+    homologated_only: bool | None = None,
+) -> dict:
+    """Métricas com última leitura por jogo. homologated_only: True=candidatos, False=alternativas, None=todos."""
+    if homologated_only is True:
+        pool = [r for r in recommendations if not r.excluded]
+    elif homologated_only is False:
+        pool = [r for r in recommendations if r.excluded]
+    else:
+        pool = list(recommendations)
+
     latest_by_fixture: dict[int, AiRecommendation] = {}
-    for rec in sorted(recommendations, key=lambda r: r.analyzed_at):
+    for rec in sorted(pool, key=lambda r: r.analyzed_at):
         latest_by_fixture[rec.fixture_id] = rec
 
     rows = list(latest_by_fixture.values())
@@ -224,7 +245,8 @@ def compute_accuracy_stats(recommendations: list[AiRecommendation]) -> dict:
 
     by_market: dict[str, dict] = {}
     for rec in resolved:
-        bucket = by_market.setdefault(rec.market, {"hit": 0, "miss": 0, "total": 0})
+        group = normalize_market_group(rec.market)
+        bucket = by_market.setdefault(group, {"hit": 0, "miss": 0, "total": 0})
         bucket["total"] += 1
         if rec.outcome == "HIT":
             bucket["hit"] += 1
@@ -240,6 +262,77 @@ def compute_accuracy_stats(recommendations: list[AiRecommendation]) -> dict:
         "hit_rate_pct": round(len(hits) / len(resolved) * 100) if resolved else None,
         "by_market": by_market,
     }
+
+
+def compute_split_stats(recommendations: list[AiRecommendation]) -> dict:
+    """Separa métricas: homologadas (candidatos) vs alternativas."""
+    return {
+        "homologated": compute_accuracy_stats(recommendations, homologated_only=True),
+        "alternate": compute_accuracy_stats(recommendations, homologated_only=False),
+    }
+
+
+def filter_recommendations_by_month(
+    recommendations: list[AiRecommendation],
+    year: int,
+    month: int,
+) -> list[AiRecommendation]:
+    return [
+        r
+        for r in recommendations
+        if analysis_local_date(r.analyzed_at).year == year
+        and analysis_local_date(r.analyzed_at).month == month
+    ]
+
+
+def parse_month_param(mes: str | None) -> tuple[int, int]:
+    from palpitaria.services.ledger import current_period
+
+    cy, cm = current_period()
+    if not mes:
+        return cy, cm
+    try:
+        parts = mes.strip().split("-")
+        if len(parts) != 2:
+            return cy, cm
+        return int(parts[0]), int(parts[1])
+    except (ValueError, TypeError):
+        return cy, cm
+
+
+def build_month_options(recommendations: list[AiRecommendation]) -> list[dict]:
+    from palpitaria.services.ledger import current_period, period_label
+
+    cy, cm = current_period()
+    keys: set[tuple[int, int]] = {(cy, cm)}
+    for rec in recommendations:
+        d = analysis_local_date(rec.analyzed_at)
+        keys.add((d.year, d.month))
+
+    options = []
+    for year, month in sorted(keys, reverse=True):
+        options.append(
+            {
+                "value": f"{year}-{month:02d}",
+                "label": period_label(year, month),
+            }
+        )
+    return options
+
+
+def market_rows_from_stats(stats: dict) -> list[dict]:
+    rows = []
+    for market, data in sorted(stats["by_market"].items(), key=lambda x: -x[1]["total"]):
+        rows.append(
+            {
+                "market": market,
+                "hit": data["hit"],
+                "miss": data["miss"],
+                "total": data["total"],
+                "hit_rate_pct": round(data["hit"] / data["total"] * 100) if data["total"] else None,
+            }
+        )
+    return rows
 
 
 def _latest_per_fixture(recommendations: list[AiRecommendation]) -> list[AiRecommendation]:
@@ -264,46 +357,6 @@ def _row_from_rec(rec: AiRecommendation) -> dict:
     }
 
 
-def group_recommendations_by_month(recommendations: list[AiRecommendation]) -> list[dict]:
-    """Agrupa por mês (timezone app) com métricas e linhas compactas."""
-    from collections import defaultdict
-
-    from palpitaria.services.ledger import period_label
-
-    buckets: dict[tuple[int, int], list[AiRecommendation]] = defaultdict(list)
-    for rec in recommendations:
-        d = analysis_local_date(rec.analyzed_at)
-        buckets[(d.year, d.month)].append(rec)
-
-    months: list[dict] = []
-    for year, month in sorted(buckets.keys(), reverse=True):
-        recs = buckets[(year, month)]
-        deduped = _latest_per_fixture(recs)
-        stats = compute_accuracy_stats(recs)
-        rows = [_row_from_rec(r) for r in deduped]
-        months.append(
-            {
-                "period": period_label(year, month),
-                "year": year,
-                "month": month,
-                "stats": stats,
-                "rows": rows,
-            }
-        )
-    return months
-
-
-def monthly_summary_rows(recommendations: list[AiRecommendation]) -> list[dict]:
-    """Uma linha por mês para tabela analítica no topo."""
-    return [
-        {
-            "period": block["period"],
-            "total": block["stats"]["total"],
-            "resolved": block["stats"]["resolved"],
-            "hits": block["stats"]["hits"],
-            "misses": block["stats"]["misses"],
-            "pending": block["stats"]["pending"],
-            "hit_rate_pct": block["stats"]["hit_rate_pct"],
-        }
-        for block in group_recommendations_by_month(recommendations)
-    ]
+def rows_for_scope(recommendations: list[AiRecommendation], *, homologated: bool) -> list[dict]:
+    pool = [r for r in recommendations if r.excluded != homologated]
+    return [_row_from_rec(r) for r in _latest_per_fixture(pool)]
