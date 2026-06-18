@@ -247,6 +247,41 @@ class ApiConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PipelineRun(Base):
+    """Execução do pipeline — remoto (API) com trava diária; web sem limite."""
+
+    __tablename__ = "pipeline_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_day: Mapped[str] = mapped_column(String(10), index=True)  # YYYY-MM-DD (APP_TIMEZONE)
+    trigger: Mapped[str] = mapped_column(String(20), index=True)  # remote_api | web_admin
+    status: Mapped[str] = mapped_column(String(20), default="running")  # running | done | error
+    comp_code: Mapped[str] = mapped_column(String(10), default="WC")
+    watch_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class RemotePipelineDaily(Base):
+    """Trava atômica: no máximo 1 disparo remoto por dia."""
+
+    __tablename__ = "remote_pipeline_daily"
+
+    run_day: Mapped[str] = mapped_column(String(10), primary_key=True)
+    pipeline_run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PipelineLogLine(Base):
+    __tablename__ = "pipeline_log_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"), index=True)
+    line: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Cycle(Base):
     __tablename__ = "cycles"
 

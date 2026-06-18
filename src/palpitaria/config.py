@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     database_url: str = ""
     debug: bool = False
     secret_key: str = "palpitaria-secret-key-2026-secure-v1"
+    pipeline_trigger_secret: str = ""
 
     @field_validator(
         "database_url",
@@ -74,6 +75,7 @@ class Settings(BaseSettings):
         "football_data_token",
         "openai_base_url",
         "app_url",
+        "pipeline_trigger_secret",
         mode="before",
     )
     @classmethod
@@ -188,7 +190,9 @@ class Settings(BaseSettings):
         return path
 
     @property
-    def has_football_token(self) -> bool:
+    def has_pipeline_trigger(self) -> bool:
+        return bool(self.pipeline_trigger_secret and len(self.pipeline_trigger_secret) >= 32)
+
         return bool(self.football_data_token and self.football_data_token != "your_token_here")
 
     @property

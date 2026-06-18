@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atualização Palpitaria FC</title>
+  <style>
+    :root {
+      --blue: #2563eb;
+      --green: #22c55e;
+      --muted: #64748b;
+      --text: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .wrap { width: 100%; max-width: 860px; }
+    .hero {
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+    .hero h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.35rem;
+      color: var(--blue);
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .terminal-modal {
+      width: 100%;
+      height: 420px;
+      background: #0f172a;
+      color: var(--green);
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.35);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+    .terminal-header {
+      background: #1e293b;
+      padding: 0.6rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #334155;
+      color: #e2e8f0;
+    }
+    .terminal-body {
+      padding: 1rem;
+      flex: 1;
+      overflow-y: auto;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+    }
+    .terminal-body pre { margin: 0; }
+    .terminal-footer {
+      background: #1e293b;
+      padding: 0.55rem 1rem;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }
+    .alert {
+      margin-top: 1rem;
+      padding: 0.9rem 1rem;
+      border-radius: 10px;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      color: #9a3412;
+      font-size: 0.9rem;
+    }
+    .done-link {
+      display: inline-block;
+      margin-top: 1rem;
+      color: var(--blue);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    #top-progress {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: #e2e8f0;
+      z-index: 9999;
+    }
+    #top-progress .bar {
+      height: 100%;
+      width: 35%;
+      background: linear-gradient(90deg, #22c55e, #fbbf24, #2563eb);
+      animation: progress-slide 1.4s ease-in-out infinite;
+    }
+    @keyframes progress-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+  </style>
+</head>
+<body>
+  <div id="top-progress"><div class="bar"></div></div>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Atualização Completa</h1>
+      <p>Acompanhe o progresso em tempo real · {{ app_timezone }}</p>
+    </div>
+    <div class="terminal-modal" id="terminal-modal">
+      <div class="terminal-header">
+        <span id="terminal-title" style="font-weight: 800; font-size: 0.9rem;">Atualização Completa…</span>
+        <div style="display: flex; gap: 0.5rem;">
+          <span style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%;"></span>
+          <span style="width: 12px; height: 12px; background: #fbbf24; border-radius: 50%;"></span>
+          <span style="width: 12px; height: 12px; background: #22c55e; border-radius: 50%;"></span>
+        </div>
+      </div>
+      <div class="terminal-body" id="terminal-body">
+        <pre>[SISTEMA] Aguardando logs do servidor…</pre>
+      </div>
+      <div class="terminal-footer">
+        <span id="elapsed">Tempo: 0s</span>
+        <span>Vision v1.0</span>
+      </div>
+    </div>
+    <div id="message"></div>
+  </div>
+  <script>
+    const watchToken = {{ watch_token | tojson }};
+    let loadingTimer = null;
+    let loadingStart = Date.now();
+    let logPolling = null;
+    let statusPolling = null;
+
+    function startElapsedTimer() {
+      loadingTimer = setInterval(function() {
+        const el = document.getElementById('elapsed');
+        if (!el) return;
+        const secs = Math.floor((Date.now() - loadingStart) / 1000);
+        const mins = Math.floor(secs / 60);
+        const rem = secs % 60;
+        el.textContent = mins > 0 ? `Tempo: ${mins}min ${rem}s` : `Tempo: ${secs}s`;
+      }, 1000);
+    }
+
+    function pollLogs() {
+      if (!watchToken) return;
+      const body = document.getElementById('terminal-body');
+      fetch('/api/v1/pipeline/logs?t=' + encodeURIComponent(watchToken))
+        .then(r => r.text())
+        .then(function(html) {
+          const text = html.replace(/<[^>]+>/g, '').trim();
+          if (!text) return;
+          body.innerHTML = html;
+          body.scrollTop = body.scrollHeight;
+        })
+        .catch(function() {
+          body.innerHTML = '<pre>[SISTEMA] Aguardando logs do servidor…</pre>';
+        });
+    }
+
+    function pollStatus() {
+      if (!watchToken) return;
+      fetch('/api/v1/pipeline/status?t=' + encodeURIComponent(watchToken))
+        .then(r => r.json())
+        .then(function(data) {
+          if (!data.done || data.running) return;
+          clearInterval(statusPolling);
+          clearInterval(logPolling);
+          if (loadingTimer) clearInterval(loadingTimer);
+          const msg = document.getElementById('message');
+          if (data.error) {
+            msg.innerHTML = '<div class="alert">Erro: ' + data.error + '</div>';
+            return;
+          }
+          msg.innerHTML = '<a class="done-link" href="/?comp=' + encodeURIComponent(data.comp || '') + '">✓ Concluído — abrir Palpitaria FC</a>';
+          setTimeout(function() {
+            window.location.href = '/?comp=' + encodeURIComponent(data.comp || '');
+          }, 2500);
+        })
+        .catch(function() {});
+    }
+
+    if (!watchToken) {
+      document.getElementById('terminal-body').innerHTML = '<pre>[ERRO] Link inválido — use o atalho da área de trabalho.</pre>';
+    } else {
+      startElapsedTimer();
+      logPolling = setInterval(pollLogs, 1000);
+      statusPolling = setInterval(pollStatus, 1500);
+      pollLogs();
+      pollStatus();
+    }
+  </script>
+</body>
+</html>

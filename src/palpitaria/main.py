@@ -1,4 +1,5 @@
 import json
+import threading
 from collections import deque
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -47,11 +48,37 @@ from palpitaria.models import Fixture
 
 # Global log buffer for "Nerd Vision"
 LOG_BUFFER = deque(maxlen=100)
+PIPELINE_STATE = {"active": False, "running": False, "done": False, "error": None, "comp": None}
+PIPELINE_CANCEL = threading.Event()
+_ACTIVE_DB_RUN_ID: int | None = None
 
 
-def add_log(msg: str):
+def reset_pipeline_state(cancelled: bool = False) -> None:
+    PIPELINE_CANCEL.set()
+    PIPELINE_STATE.update(active=False, running=False, done=True, error=None, comp=None)
+    if cancelled:
+        add_log("⛔ Pipeline abortado pelo usuário.")
+    PIPELINE_CANCEL.clear()
+
+
+def add_log(msg: str) -> None:
     timestamp = datetime.now().strftime("%H:%M:%S")
-    LOG_BUFFER.append(f"[{timestamp}] {msg}")
+    line = f"[{timestamp}] {msg}"
+    LOG_BUFFER.append(line)
+    run_id = _ACTIVE_DB_RUN_ID
+    if run_id is None:
+        return
+    try:
+        from palpitaria.database import SessionLocal
+        from palpitaria.services.pipeline_trigger import persist_log_line
+
+        db = SessionLocal()
+        try:
+            persist_log_line(db, run_id, line)
+        finally:
+            db.close()
+    except Exception:
+        pass
 
 
 def compute_bet_pl(stake: float, odds: float, outcome: str, commission_rate: float) -> float:
@@ -109,6 +136,10 @@ def admin_required(request: Request, user=Depends(login_required)):
 
 @app.on_event("startup")
 def on_startup() -> None:
+    LOG_BUFFER.clear()
+    PIPELINE_STATE.update(active=False, running=False, done=False, error=None, comp=None)
+    PIPELINE_CANCEL.clear()
+
     if settings.database_config_error:
         print(f"AVISO: {settings.database_config_error}", flush=True)
         return
@@ -422,26 +453,64 @@ def _execute_analysis_pipeline(db: Session, comp_code: str):
 @app.post("/pipeline", response_class=HTMLResponse)
 def run_full_pipeline(request: Request, comp: str | None = None, db: Session = Depends(get_db), user=Depends(admin_required)):
     from palpitaria.services.config_service import get_api_config
-    
-    token = get_api_config(db, "FOOTBALL_DATA_TOKEN")
-    if not token:
+
+    comp_code = _start_pipeline(comp, db, get_api_config(db, "FOOTBALL_DATA_TOKEN"))
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse("", status_code=202)
+    return RedirectResponse(url="/", status_code=303)
+
+
+def _start_pipeline(comp_code: str, db: Session, football_token: str | None, *, run_id: int | None = None) -> str:
+    if PIPELINE_STATE["running"]:
+        raise HTTPException(status_code=409, detail="Já há uma atualização em andamento. Aguarde terminar.")
+    if not football_token:
         raise HTTPException(status_code=400, detail="Configure FOOTBALL_DATA_TOKEN no Admin ou .env")
 
-    comp_code = comp or settings.world_cup_code
-    
+    PIPELINE_CANCEL.clear()
+    PIPELINE_STATE.update(active=True, running=True, done=False, error=None, comp=comp_code)
     LOG_BUFFER.clear()
+    add_log(f"🚀 Preparando pipeline completo ({comp_code})...")
+    thread = threading.Thread(target=_run_full_pipeline_work, args=(comp_code, run_id), daemon=True)
+    thread.start()
+    return comp_code
+
+
+def _pipeline_aborted() -> bool:
+    return PIPELINE_CANCEL.is_set()
+
+
+def _run_full_pipeline_work(comp_code: str, run_id: int | None = None) -> None:
+    global _ACTIVE_DB_RUN_ID
+    from palpitaria.database import SessionLocal
+    from palpitaria.services.config_service import get_api_config
+    from palpitaria.services.pipeline_trigger import finalize_pipeline_run
+
+    _ACTIVE_DB_RUN_ID = run_id
+    db = SessionLocal()
+    pipeline_error: str | None = None
     add_log(f"🚀 INICIANDO PIPELINE COMPLETO ({comp_code})")
-    
+
     try:
-        # PASSO 1: Sync Data
+        if _pipeline_aborted():
+            raise RuntimeError("Pipeline abortado")
+
+        token = get_api_config(db, "FOOTBALL_DATA_TOKEN")
+        if not token:
+            raise RuntimeError("Configure FOOTBALL_DATA_TOKEN no Admin ou .env")
+
         add_log("\n[PASSO 1/3] Sincronizando jogos e resultados...")
         client = FootballDataClient(token=token)
         ingest_result = ingest_competition(db, client, competition_code=comp_code, log_callback=add_log)
+        if _pipeline_aborted():
+            raise RuntimeError("Pipeline abortado")
         localize_existing_teams(db)
         resolve_pending_recommendations(db, comp_code)
         add_log(f"✓ Jogos sincronizados: {ingest_result.get('fixtures', 0)} novos/atualizados.")
 
-        # PASSO 2: Sync Profiles
+        if _pipeline_aborted():
+            raise RuntimeError("Pipeline abortado")
+
         add_log("\n[PASSO 2/3] Atualizando perfis técnicos (API)...")
         profiles = build_team_profiles(
             db,
@@ -450,26 +519,133 @@ def run_full_pipeline(request: Request, comp: str | None = None, db: Session = D
             competition_code=comp_code,
             today_only=True,
         )
+        if _pipeline_aborted():
+            raise RuntimeError("Pipeline abortado")
         ready, total = count_teams_with_profiles(db)
         add_log(f"✓ Perfis API atualizados: {profiles} hoje. Total: {ready}/{total}.")
 
-        # PASSO 3: Analyze
+        if _pipeline_aborted():
+            raise RuntimeError("Pipeline abortado")
+
         add_log("\n[PASSO 3/3] Gerando leituras IA (Web + Scrap + LLM)...")
         _execute_analysis_pipeline(db, comp_code)
+        if _pipeline_aborted():
+            raise RuntimeError("Pipeline abortado")
         add_log("\n✓ PIPELINE CONCLUÍDO COM SUCESSO!")
-
     except Exception as exc:
         db.rollback()
-        add_log(f"\n❌ ERRO NO PIPELINE: {exc}")
-        raise HTTPException(status_code=500, detail=f"Erro no pipeline: {exc}")
+        if str(exc) == "Pipeline abortado":
+            add_log("\n⛔ PIPELINE ABORTADO.")
+            PIPELINE_STATE["error"] = None
+        else:
+            pipeline_error = str(exc)
+            add_log(f"\n❌ ERRO NO PIPELINE: {exc}")
+            PIPELINE_STATE["error"] = pipeline_error
+    finally:
+        PIPELINE_STATE["running"] = False
+        PIPELINE_STATE["done"] = True
+        PIPELINE_STATE["active"] = False
+        if run_id is not None:
+            finalize_pipeline_run(db, run_id, error=pipeline_error)
+        db.close()
+        _ACTIVE_DB_RUN_ID = None
 
-    if request.headers.get("HX-Request"):
-        return HTMLResponse(
-            "",
-            status_code=200,
-            headers={"HX-Redirect": f"/?comp={comp_code}"},
-        )
-    return RedirectResponse(url="/", status_code=303)
+
+@app.post("/api/v1/pipeline/trigger")
+def api_trigger_pipeline(
+    request: Request,
+    comp: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    from palpitaria.services.config_service import get_api_config
+    from palpitaria.services.pipeline_trigger import (
+        claim_remote_daily_run,
+        verify_trigger_request,
+        watch_url_for_token,
+    )
+
+    verify_trigger_request(request)
+    if PIPELINE_STATE["running"]:
+        raise HTTPException(status_code=409, detail="Já há uma atualização em andamento. Aguarde terminar.")
+
+    football_token = get_api_config(db, "FOOTBALL_DATA_TOKEN")
+    if not football_token:
+        raise HTTPException(status_code=400, detail="Configure FOOTBALL_DATA_TOKEN no Admin ou .env")
+
+    comp_code = comp or settings.world_cup_code
+    run, watch_token = claim_remote_daily_run(db, comp_code)
+    try:
+        _start_pipeline(comp_code, db, football_token, run_id=run.id)
+    except HTTPException:
+        from palpitaria.services.pipeline_trigger import finalize_pipeline_run
+
+        finalize_pipeline_run(db, run.id, error="Falha ao iniciar pipeline")
+        raise
+    except Exception as exc:
+        from palpitaria.services.pipeline_trigger import finalize_pipeline_run
+
+        finalize_pipeline_run(db, run.id, error=str(exc))
+        raise HTTPException(status_code=500, detail="Falha ao iniciar pipeline") from exc
+
+    return {
+        "status": "started",
+        "run_day": run.run_day,
+        "comp": comp_code,
+        "watch_token": watch_token,
+        "watch_url": watch_url_for_token(watch_token),
+    }
+
+
+@app.get("/api/v1/pipeline/status")
+def api_pipeline_status(t: str, db: Session = Depends(get_db)) -> dict:
+    from palpitaria.services.pipeline_trigger import get_run_by_watch_token, run_status_payload
+
+    run = get_run_by_watch_token(db, t)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Token inválido ou expirado.")
+    return run_status_payload(run)
+
+
+@app.get("/api/v1/pipeline/logs")
+def api_pipeline_logs(t: str, db: Session = Depends(get_db)) -> HTMLResponse:
+    from palpitaria.services.pipeline_trigger import fetch_log_lines, get_run_by_watch_token
+
+    run = get_run_by_watch_token(db, t)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Token inválido ou expirado.")
+    content = "\n".join(fetch_log_lines(db, run.id))
+    return HTMLResponse(f"<pre>{content}</pre>")
+
+
+@app.get("/pipeline/watch", response_class=HTMLResponse)
+def pipeline_watch_page(request: Request, t: str | None = None):
+    return TEMPLATES.TemplateResponse(
+        request,
+        "pipeline_watch.html",
+        {
+            "watch_token": t or "",
+            "app_timezone": settings.app_timezone,
+        },
+    )
+
+
+@app.post("/pipeline/abort")
+def abort_pipeline(user=Depends(admin_required)) -> dict:
+    was_active = PIPELINE_STATE["active"] or PIPELINE_STATE["running"]
+    LOG_BUFFER.clear()
+    reset_pipeline_state(cancelled=was_active)
+    return {"aborted": was_active, "status": "idle"}
+
+
+@app.get("/pipeline/status")
+def pipeline_status(user=Depends(admin_required)) -> dict:
+    return {
+        "active": PIPELINE_STATE["active"],
+        "running": PIPELINE_STATE["running"],
+        "done": PIPELINE_STATE["done"],
+        "error": PIPELINE_STATE["error"],
+        "comp": PIPELINE_STATE["comp"],
+    }
 
 
 @app.get("/logs")
