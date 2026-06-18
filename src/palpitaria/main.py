@@ -43,7 +43,15 @@ from palpitaria.services.ai_tracker import (
     resolve_pending_recommendations,
     rows_for_scope,
 )
-from palpitaria.services.ledger import bet_competition_expr, close_past_months, current_period, period_label
+from palpitaria.services.ledger import (
+    bet_competition_expr,
+    close_past_months,
+    compute_bet_pl,
+    current_period,
+    migrate_branch_sides,
+    normalize_bet_side,
+    period_label,
+)
 from palpitaria.models import Fixture
 
 # Global log buffer for "Nerd Vision"
@@ -79,15 +87,6 @@ def add_log(msg: str) -> None:
             db.close()
     except Exception:
         pass
-
-
-def compute_bet_pl(stake: float, odds: float, outcome: str, commission_rate: float) -> float:
-    commission = commission_rate / 100.0
-    if outcome == "WIN":
-        return stake * (odds - 1) * (1 - commission)
-    if outcome == "LOSS":
-        return -stake
-    return 0.0
 
 
 def hit_rate_pct(wins: int, total: int) -> int | None:
@@ -149,6 +148,7 @@ def on_startup() -> None:
 
         db = SessionLocal()
         try:
+            migrate_branch_sides(db)
             closed = close_past_months(db)
             if closed:
                 print(f"Ledger: {len(closed)} fechamento(s) mensal(is) consolidado(s).", flush=True)
@@ -929,7 +929,9 @@ async def add_bet(request: Request, db: Session = Depends(get_db), user=Depends(
     outcome = form.get("outcome") # WIN, LOSS, PENDING
     
     commission_rate = branch.commission_rate if branch else 6.5
-    pl = compute_bet_pl(stake, odds, outcome or "PENDING", commission_rate)
+    pl = compute_bet_pl(
+        stake, odds, outcome or "PENDING", commission_rate, side=branch.side
+    )
 
     bet = Bet(
         branch_id=branch_id,
@@ -965,9 +967,17 @@ async def add_branch(request: Request, db: Session = Depends(get_db), user=Depen
     name = form.get("name")
     description = form.get("description")
     commission_rate = float(form.get("commission_rate", 6.5))
+    side = normalize_bet_side(form.get("side"))
     slug = f"{name.lower().replace(' ', '_')}_{user.id}"
     
-    branch = Branch(name=name, slug=slug, description=description, commission_rate=commission_rate, user_id=user.id)
+    branch = Branch(
+        name=name,
+        slug=slug,
+        description=description,
+        commission_rate=commission_rate,
+        side=side,
+        user_id=user.id,
+    )
     db.add(branch)
     db.commit()
     return RedirectResponse(url="/branches", status_code=303)
@@ -990,7 +1000,9 @@ async def update_bet_outcome(bet_id: int, request: Request, db: Session = Depend
     commission_rate = branch.commission_rate if branch else 6.5
 
     bet.outcome = outcome
-    bet.profit_loss = compute_bet_pl(bet.stake, bet.odds, outcome, commission_rate)
+    bet.profit_loss = compute_bet_pl(
+        bet.stake, bet.odds, outcome, commission_rate, side=branch.side
+    )
     db.commit()
     return RedirectResponse(url="/branches", status_code=303)
 

@@ -193,6 +193,8 @@ class Settings(BaseSettings):
     def has_pipeline_trigger(self) -> bool:
         return bool(self.pipeline_trigger_secret and len(self.pipeline_trigger_secret) >= 32)
 
+    @property
+    def has_football_token(self) -> bool:
         return bool(self.football_data_token and self.football_data_token != "your_token_here")
 
     @property

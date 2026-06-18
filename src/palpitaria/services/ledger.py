@@ -17,6 +17,75 @@ def bet_competition_expr():
     """Apostas antigas sem competition_code contam como Copa (WC)."""
     return func.coalesce(Bet.competition_code, settings.world_cup_code)
 
+VALID_BET_SIDES = frozenset({"BACK", "LAY"})
+
+
+def normalize_bet_side(side: str | None) -> str:
+    """Apostas antigas sem side contam como BACK."""
+    if side and side.upper() in VALID_BET_SIDES:
+        return side.upper()
+    return "BACK"
+
+
+def compute_bet_pl(
+    stake: float,
+    odds: float,
+    outcome: str,
+    commission_rate: float,
+    *,
+    side: str = "BACK",
+) -> float:
+    """
+    P&L por entrada. stake = valor apostado (BACK) ou stake do backer no lay (LAY).
+    LAY green: stake * (1 - comissão); LAY red: -stake * (odds - 1) (liability).
+    """
+    bet_side = normalize_bet_side(side)
+    commission = commission_rate / 100.0
+    if outcome == "WIN":
+        if bet_side == "LAY":
+            return stake * (1 - commission)
+        return stake * (odds - 1) * (1 - commission)
+    if outcome == "LOSS":
+        if bet_side == "LAY":
+            return -stake * (odds - 1)
+        return -stake
+    return 0.0
+
+
+def infer_branch_side(name: str, slug: str = "", description: str = "") -> str:
+    """Heurística para filiais existentes: Correct Score → LAY, demais → BACK."""
+    blob = f"{name} {slug} {description or ''}".lower()
+    if "correct score" in blob or "placar exato" in blob:
+        return "LAY"
+    return "BACK"
+
+
+def migrate_branch_sides(db: Session) -> None:
+    """Preenche side em filiais antigas e recalcula P&L de entradas já fechadas."""
+    branches = db.query(Branch).all()
+    changed = False
+    for branch in branches:
+        if not branch.side or branch.side not in VALID_BET_SIDES:
+            branch.side = infer_branch_side(branch.name, branch.slug, branch.description or "")
+            changed = True
+        commission = branch.commission_rate
+        for bet in branch.bets:
+            if bet.outcome in ("WIN", "LOSS"):
+                new_pl = compute_bet_pl(
+                    bet.stake, bet.odds, bet.outcome, commission, side=branch.side
+                )
+                if bet.profit_loss != new_pl:
+                    bet.profit_loss = new_pl
+                    changed = True
+    if changed:
+        db.commit()
+
+
+def lay_liability(stake: float, odds: float) -> float:
+    """Responsabilidade máxima em um lay (exchange)."""
+    return stake * (odds - 1)
+
+
 MONTHS_PT = (
     "",
     "Janeiro",

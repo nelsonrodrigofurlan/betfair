@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -63,9 +63,45 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def apply_schema_migrations() -> None:
+    """Migrações incrementais — preserva dados existentes (ADD COLUMN + defaults)."""
+    if settings.database_config_error:
+        return
+    engine = _ensure_engine()
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "postgresql":
+            conn.execute(
+                text("ALTER TABLE branches ADD COLUMN IF NOT EXISTS side VARCHAR(10) DEFAULT 'BACK'")
+            )
+            conn.execute(
+                text(
+                    "UPDATE branches SET side = 'LAY' WHERE "
+                    "lower(name) LIKE '%correct score%' OR lower(slug) LIKE '%correct%score%' "
+                    "OR lower(coalesce(description, '')) LIKE '%correct score%' "
+                    "OR lower(name) LIKE '%placar exato%'"
+                )
+            )
+            conn.execute(text("UPDATE branches SET side = 'BACK' WHERE side IS NULL"))
+        elif dialect == "sqlite":
+            branch_cols = {c["name"] for c in inspect(engine).get_columns("branches")}
+            if "side" not in branch_cols:
+                conn.execute(text("ALTER TABLE branches ADD COLUMN side VARCHAR(10) DEFAULT 'BACK'"))
+                conn.execute(
+                    text(
+                        "UPDATE branches SET side = 'LAY' WHERE "
+                        "lower(name) LIKE '%correct score%' OR lower(slug) LIKE '%correct%score%' "
+                        "OR lower(coalesce(description, '')) LIKE '%correct score%' "
+                        "OR lower(name) LIKE '%placar exato%'"
+                    )
+                )
+                conn.execute(text("UPDATE branches SET side = 'BACK' WHERE side IS NULL"))
+
+
 def init_db() -> None:
     if settings.database_config_error:
         return
     from palpitaria import models  # noqa: F401
 
     Base.metadata.create_all(bind=_ensure_engine())
+    apply_schema_migrations()

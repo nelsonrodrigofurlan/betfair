@@ -59,6 +59,18 @@ def migrate_to_supabase():
                 "ALTER TABLE bets ADD COLUMN IF NOT EXISTS competition_code VARCHAR(10)"
             ))
             conn.execute(text(
+                "ALTER TABLE branches ADD COLUMN IF NOT EXISTS side VARCHAR(10) DEFAULT 'BACK'"
+            ))
+            conn.execute(text(
+                "UPDATE branches SET side = 'LAY' WHERE "
+                "lower(name) LIKE '%correct score%' OR lower(slug) LIKE '%correct%score%' "
+                "OR lower(coalesce(description, '')) LIKE '%correct score%' "
+                "OR lower(name) LIKE '%placar exato%'"
+            ))
+            conn.execute(text(
+                "UPDATE branches SET side = 'BACK' WHERE side IS NULL"
+            ))
+            conn.execute(text(
                 "ALTER TABLE branch_monthly_summaries ADD COLUMN IF NOT EXISTS competition_code VARCHAR(10) DEFAULT 'WC'"
             ))
             # Drop old constraint if exists and add new one

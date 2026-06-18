@@ -162,6 +162,7 @@ class Branch(Base):
     slug: Mapped[str] = mapped_column(String(60), unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     commission_rate: Mapped[float] = mapped_column(Float, default=6.5)  # % de comissão (ex: 6.5)
+    side: Mapped[str] = mapped_column(String(10), default="BACK")  # BACK | LAY — define P&L da filial
 
     user: Mapped["User | None"] = relationship(back_populates="branches")
     bets: Mapped[list["Bet"]] = relationship(back_populates="branch")

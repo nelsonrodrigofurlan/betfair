@@ -1,11 +1,45 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from palpitaria.services.ledger import bet_local_period, close_past_months, current_period, period_label
+import pytest
+
+from palpitaria.services.ledger import (
+    bet_local_period,
+    close_past_months,
+    compute_bet_pl,
+    current_period,
+    infer_branch_side,
+    lay_liability,
+    normalize_bet_side,
+    period_label,
+)
 
 
 def test_period_label():
     assert period_label(2026, 6) == "Junho/2026"
+
+
+def test_infer_branch_side():
+    assert infer_branch_side("Lay Correct Score 0-0") == "LAY"
+    assert infer_branch_side("Over 1.5 Goals", "over_1_5_1") == "BACK"
+
+
+def test_normalize_bet_side_defaults_to_back():
+    assert normalize_bet_side(None) == "BACK"
+    assert normalize_bet_side("") == "BACK"
+    assert normalize_bet_side("lay") == "LAY"
+
+
+def test_compute_bet_pl_back():
+    assert compute_bet_pl(100, 2.0, "WIN", 6.5, side="BACK") == pytest.approx(93.5)
+    assert compute_bet_pl(100, 2.0, "LOSS", 6.5, side="BACK") == -100
+
+
+def test_compute_bet_pl_lay():
+    # Lay £10 @ 10.0 — green keeps stake minus commission; red pays liability
+    assert compute_bet_pl(10, 10.0, "WIN", 5.0, side="LAY") == pytest.approx(9.5)
+    assert compute_bet_pl(10, 10.0, "LOSS", 5.0, side="LAY") == pytest.approx(-90)
+    assert lay_liability(10, 10.0) == 90
 
 
 def test_bet_local_period_uses_app_timezone():
