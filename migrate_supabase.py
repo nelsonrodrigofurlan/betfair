@@ -143,14 +143,26 @@ def migrate_to_supabase():
         # 2. Seed Competitions
         print("Seeding competitions...")
         comps = [
-            {"code": "WC", "name": "Copa do Mundo 2026", "is_active": True},
-            {"code": "BSA", "name": "Brasileirão Série A", "is_active": True},
-            {"code": "CDB", "name": "Copa do Brasil", "is_active": True},
+            {"code": "WC", "name": "Copa do Mundo 2026", "is_active": True, "season": 2026},
+            {"code": "BSA", "name": "Brasileirão Série A", "is_active": True, "season": 2026},
+            {"code": "PL", "name": "Premier League", "is_active": True, "season": 2025},
+            {"code": "PD", "name": "La Liga", "is_active": True, "season": 2025},
+            {"code": "BL1", "name": "Bundesliga", "is_active": True, "season": 2025},
+            {"code": "SA", "name": "Serie A", "is_active": True, "season": 2025},
+            {"code": "FL1", "name": "Ligue 1", "is_active": True, "season": 2025},
+            {"code": "CL", "name": "Champions League", "is_active": True, "season": 2025},
+            {"code": "EL", "name": "Europa League", "is_active": True, "season": 2025},
+            {"code": "CDB", "name": "Copa do Brasil", "is_active": True, "season": 2026},
         ]
         for c_data in comps:
             exists = db.query(Competition).filter_by(code=c_data["code"]).first()
             if not exists:
                 db.add(Competition(**c_data))
+            else:
+                # Update season and name if exists
+                exists.name = c_data["name"]
+                exists.season = c_data["season"]
+                exists.is_active = c_data["is_active"]
 
         # 3. Seed API Configs (non-sensitive only)
         print("Seeding API configs...")
