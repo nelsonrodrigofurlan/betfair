@@ -43,8 +43,20 @@ def extract_betfair_odds(odds_data):
         }
         
         for bookmaker in game.get("bookmakers", []):
-            if bookmaker.get("key") == "betfair_ex_eu":
-                game_info["betfair_ex"] = bookmaker.get("markets")
+            if bookmaker.get("key").startswith("betfair_ex"):
+                # Traduzir nomes nos outcomes para bater com o app
+                markets = bookmaker.get("markets", [])
+                for mkt in markets:
+                    for outcome in mkt.get("outcomes", []):
+                        name = outcome.get("name")
+                        if name == game.get("home_team"):
+                            outcome["name"] = home_pt
+                        elif name == game.get("away_team"):
+                            outcome["name"] = away_pt
+                        elif name.lower() == "draw":
+                            outcome["name"] = "Empate"
+                
+                game_info["betfair_ex"] = markets
                 break
         
         if game_info["betfair_ex"]:

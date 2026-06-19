@@ -87,19 +87,25 @@
         </div>
         <div style="display: flex; align-items: center; gap: 1rem;">
           {% if betfair_odds %}
-            {% set match_odds = None %}
+            {% set ns = namespace(match_odds=None, h_price='—', d_price='—', a_price='—') %}
             {% for go in betfair_odds %}
-              {% if (go.home_team in a.home_name or a.home_name in go.home_team) and (go.away_team in a.away_name or a.away_name in go.away_team) %}
-                {% set match_odds = go.betfair_ex %}
+              {% if go.home_team.lower().strip() == a.home_name.lower().strip() and go.away_team.lower().strip() == a.away_name.lower().strip() %}
+                {% set ns.match_odds = go.betfair_ex %}
               {% endif %}
             {% endfor %}
             
-            {% if match_odds %}
+            {% if ns.match_odds %}
               <div style="display: flex; gap: 0.5rem; font-size: 0.75rem; background: #f8fafc; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0;">
                 <span style="color: var(--muted); font-weight: 600;">Betfair:</span>
-                {% for mkt in match_odds %}
+                {% for mkt in ns.match_odds %}
                   {% if mkt.key == 'h2h' %}
-                    <span title="Home/Draw/Away">🏠 {{ mkt.outcomes[0].price }} · 🤝 {{ mkt.outcomes[2].price }} · 🚀 {{ mkt.outcomes[1].price }}</span>
+                    {% for oc in mkt.outcomes %}
+                      {% if oc.name.lower().strip() == a.home_name.lower().strip() %}{% set ns.h_price = oc.price %}
+                      {% elif oc.name.lower().strip() == a.away_name.lower().strip() %}{% set ns.a_price = oc.price %}
+                      {% elif 'empate' in oc.name.lower() or 'draw' in oc.name.lower() %}{% set ns.d_price = oc.price %}
+                      {% endif %}
+                    {% endfor %}
+                    <span title="Home/Draw/Away">🏠 {{ ns.h_price }} · 🤝 {{ ns.d_price }} · 🚀 {{ ns.a_price }}</span>
                   {% endif %}
                 {% endfor %}
               </div>
@@ -220,19 +226,25 @@
       </div>
       <div style="display: flex; align-items: center; gap: 1rem;">
         {% if betfair_odds %}
-          {% set match_odds = None %}
+          {% set ns = namespace(match_odds=None, h_price='—', d_price='—', a_price='—') %}
           {% for go in betfair_odds %}
-            {% if (go.home_team in a.home_name or a.home_name in go.home_team) and (go.away_team in a.away_name or a.away_name in go.away_team) %}
-              {% set match_odds = go.betfair_ex %}
+            {% if go.home_team.lower().strip() == a.home_name.lower().strip() and go.away_team.lower().strip() == a.away_name.lower().strip() %}
+              {% set ns.match_odds = go.betfair_ex %}
             {% endif %}
           {% endfor %}
           
-          {% if match_odds %}
+          {% if ns.match_odds %}
             <div style="display: flex; gap: 0.5rem; font-size: 0.75rem; background: #f8fafc; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0;">
               <span style="color: var(--muted); font-weight: 600;">Betfair:</span>
-              {% for mkt in match_odds %}
+              {% for mkt in ns.match_odds %}
                 {% if mkt.key == 'h2h' %}
-                  <span title="Home/Draw/Away">🏠 {{ mkt.outcomes[0].price }} · 🤝 {{ mkt.outcomes[2].price }} · 🚀 {{ mkt.outcomes[1].price }}</span>
+                  {% for oc in mkt.outcomes %}
+                    {% if oc.name.lower().strip() == a.home_name.lower().strip() %}{% set ns.h_price = oc.price %}
+                    {% elif oc.name.lower().strip() == a.away_name.lower().strip() %}{% set ns.a_price = oc.price %}
+                    {% elif 'empate' in oc.name.lower() or 'draw' in oc.name.lower() %}{% set ns.d_price = oc.price %}
+                    {% endif %}
+                  {% endfor %}
+                  <span title="Home/Draw/Away">🏠 {{ ns.h_price }} · 🤝 {{ ns.d_price }} · 🚀 {{ ns.a_price }}</span>
                 {% endif %}
               {% endfor %}
             </div>
