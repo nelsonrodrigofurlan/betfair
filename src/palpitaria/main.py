@@ -173,6 +173,35 @@ def on_startup() -> None:
         print(f"AVISO: startup do banco falhou ({exc!r}) — app sobe em modo degradado.", flush=True)
 
 
+import json
+from palpitaria.models import Competition, Fixture
+from palpitaria.services.odds_service import fetch_odds_api_data, extract_betfair_odds
+
+def update_competition_odds(db: Session, comp_code: str):
+    """Busca odds da Betfair e salva no cache da competição."""
+    sport_map = {
+        "BSA": "soccer_brazil_campeonato",
+        "WC": "soccer_fifa_world_cup",
+        "PL": "soccer_epl",
+        "PD": "soccer_spain_la_liga",
+        "BL1": "soccer_germany_bundesliga",
+        "SA": "soccer_italy_serie_a",
+        "FL1": "soccer_france_ligue_one",
+        "CL": "soccer_uefa_champions_league",
+        "EL": "soccer_uefa_europa_league",
+    }
+    sport_key = sport_map.get(comp_code)
+    if not sport_key:
+        return
+
+    raw_odds = fetch_odds_api_data(sport=sport_key)
+    if isinstance(raw_odds, list):
+        odds_list = extract_betfair_odds(raw_odds)
+        comp = db.query(Competition).filter_by(code=comp_code).first()
+        if comp:
+            comp.odds_json = json.dumps(odds_list)
+            db.commit()
+
 def _render_home(request: Request, db: Session, comp_code: str | None = None) -> HTMLResponse:
     from palpitaria.models import FixtureReport, Competition
     localize_existing_teams(db)
@@ -197,6 +226,15 @@ def _render_home(request: Request, db: Session, comp_code: str | None = None) ->
     last_report = db.query(FixtureReport).join(Fixture).filter(Fixture.competition_code == comp_code).order_by(FixtureReport.analyzed_at.desc()).first()
     last_analysis_at = last_report.analyzed_at if last_report else None
 
+    # Odds (Lê do cache salvo na competição)
+    odds_list = []
+    comp = db.query(Competition).filter_by(code=comp_code).first()
+    if comp and comp.odds_json:
+        try:
+            odds_list = json.loads(comp.odds_json)
+        except:
+            odds_list = []
+
     return TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -216,6 +254,7 @@ def _render_home(request: Request, db: Session, comp_code: str | None = None) ->
             "last_analysis_at": last_analysis_at,
             "active_comps": active_comps,
             "current_comp": comp_code,
+            "betfair_odds": odds_list,
         },
     )
 
@@ -531,6 +570,10 @@ def _run_full_pipeline_work(comp_code: str, run_id: int | None = None) -> None:
         _execute_analysis_pipeline(db, comp_code)
         if _pipeline_aborted():
             raise RuntimeError("Pipeline abortado")
+
+        add_log("\n[PASSO 4] Atualizando odds da Betfair...")
+        update_competition_odds(db, comp_code)
+
         add_log("\n✓ PIPELINE CONCLUÍDO COM SUCESSO!")
     except Exception as exc:
         db.rollback()
@@ -632,6 +675,7 @@ def pipeline_watch_page(request: Request, t: str | None = None):
 @app.post("/pipeline/abort")
 def abort_pipeline(user=Depends(admin_required)) -> dict:
     was_active = PIPELINE_STATE["active"] or PIPELINE_STATE["running"]
+    PIPELINE_CANCEL.set()  # Sinaliza para a thread parar
     LOG_BUFFER.clear()
     reset_pipeline_state(cancelled=was_active)
     return {"aborted": was_active, "status": "idle"}

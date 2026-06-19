@@ -75,6 +75,9 @@ def apply_schema_migrations() -> None:
                 text("ALTER TABLE branches ADD COLUMN IF NOT EXISTS side VARCHAR(10) DEFAULT 'BACK'")
             )
             conn.execute(
+                text("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS odds_json TEXT")
+            )
+            conn.execute(
                 text(
                     "UPDATE branches SET side = 'LAY' WHERE "
                     "lower(name) LIKE '%correct score%' OR lower(slug) LIKE '%correct%score%' "
@@ -87,6 +90,10 @@ def apply_schema_migrations() -> None:
             branch_cols = {c["name"] for c in inspect(engine).get_columns("branches")}
             if "side" not in branch_cols:
                 conn.execute(text("ALTER TABLE branches ADD COLUMN side VARCHAR(10) DEFAULT 'BACK'"))
+            
+            comp_cols = {c["name"] for c in inspect(engine).get_columns("competitions")}
+            if "odds_json" not in comp_cols:
+                conn.execute(text("ALTER TABLE competitions ADD COLUMN odds_json TEXT"))
                 conn.execute(
                     text(
                         "UPDATE branches SET side = 'LAY' WHERE "

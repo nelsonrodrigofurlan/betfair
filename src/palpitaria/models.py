@@ -236,6 +236,7 @@ class Competition(Base):
     season: Mapped[int] = mapped_column(Integer, default=2026)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    odds_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # Cache de odds diário
 
 
 class ApiConfig(Base):

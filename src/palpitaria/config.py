@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     secret_key: str = "palpitaria-secret-key-2026-secure-v1"
     pipeline_trigger_secret: str = ""
 
+    # Betfair API
+    betfair_app_key: str = ""
+    betfair_username: str = ""
+    betfair_password: str = ""
+
+    # The Odds API
+    odds_api_key: str = ""
+
     @field_validator(
         "database_url",
         "openai_api_key",
@@ -76,6 +84,10 @@ class Settings(BaseSettings):
         "openai_base_url",
         "app_url",
         "pipeline_trigger_secret",
+        "betfair_app_key",
+        "betfair_username",
+        "betfair_password",
+        "odds_api_key",
         mode="before",
     )
     @classmethod
@@ -206,6 +218,14 @@ class Settings(BaseSettings):
         if key.startswith("~") or key.startswith("google/") or key.startswith("openai/"):
             return False
         return True
+
+    @property
+    def has_betfair(self) -> bool:
+        return bool(self.betfair_app_key and self.betfair_username and self.betfair_password)
+
+    @property
+    def has_odds_api(self) -> bool:
+        return bool(self.odds_api_key)
 
     @property
     def llm_provider_label(self) -> str:
