@@ -34,6 +34,8 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    total_deposits: Mapped[float] = mapped_column(Float, default=0.0)
+    total_withdrawals: Mapped[float] = mapped_column(Float, default=0.0)
 
     branches: Mapped[list["Branch"]] = relationship(back_populates="user")
     insights: Mapped[list["UserInsight"]] = relationship(back_populates="user")

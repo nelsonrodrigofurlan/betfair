@@ -865,6 +865,10 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
             "is_active": False
         })
 
+    # Calcular somas gerais
+    current_month_pl = sum(r["total_pl"] for r in rows if r.get("is_active"))
+    total_history_pl = sum(r["total_pl"] for r in rows)
+
     return TEMPLATES.TemplateResponse(
         request,
         "historico.html",
@@ -872,8 +876,28 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
             "rows": rows,
             "current_period": period_label(cy, cm),
             "app_timezone": settings.app_timezone,
+            "user": user,
+            "current_month_pl": current_month_pl,
+            "total_history_pl": total_history_pl,
         }
     )
+
+
+@app.post("/admin/finance/update")
+async def update_finance(
+    request: Request,
+    deposits: float = Form(...),
+    withdrawals: float = Form(...),
+    db: Session = Depends(get_db),
+    user=Depends(login_required)
+):
+    from palpitaria.models import User
+    db_user = db.query(User).filter(User.id == user.id).first()
+    if db_user:
+        db_user.total_deposits = deposits
+        db_user.total_withdrawals = withdrawals
+        db.commit()
+    return RedirectResponse(url="/historico", status_code=303)
 
 
 @app.get("/ia-historico", response_class=HTMLResponse)
