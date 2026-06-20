@@ -805,6 +805,10 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
         total_stake = sum(bet.stake for bet in bets)
         bet_count = len(bets)
         
+        # Coletar códigos de competição para o mês ativo
+        comp_codes = {bet.competition_code or "WC" for bet in bets}
+        comp_label = ", ".join(sorted(comp_codes))
+        
         rows.append({
             "period": period_label(cy, cm),
             "branch_name": b.name,
@@ -816,7 +820,7 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
             "total_pl": total_pl,
             "hit_rate_pct": hit_rate_pct(wins, bet_count),
             "closed_at": None,
-            "competition_code": "Ativo",
+            "competition_code": comp_label,
             "is_active": True
         })
 

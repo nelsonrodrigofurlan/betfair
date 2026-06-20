@@ -12,7 +12,7 @@
 
 <div class="card" style="margin-bottom: 1.5rem; background: #f0fdf4; border-color: #bbf7d0;">
   <p style="margin: 0; font-size: 0.9rem;">
-    <strong>Mês ativo:</strong> {{ current_period }} — as linhas marcadas como <span class="badge ok" style="font-size: 0.65rem; letter-spacing: 0.05em;">MÊS CORRENTE</span> refletem as entradas em tempo real.
+    <strong>Mês ativo:</strong> {{ current_period }} — acompanhe o desempenho consolidado de todas as competições em tempo real.
   </p>
 </div>
 
@@ -22,7 +22,7 @@
     <thead>
       <tr>
         <th>Período</th>
-        <th>Status</th>
+        <th>Campeonato</th>
         <th>Filial</th>
         <th>Entradas</th>
         <th>Greens</th>
@@ -36,13 +36,16 @@
     <tbody>
       {% for row in rows %}
       <tr {% if row.is_active %}style="background: rgba(34, 197, 94, 0.02);"{% endif %}>
-        <td><strong>{{ row.period }}</strong></td>
         <td>
+          <strong>{{ row.period }}</strong>
           {% if row.is_active %}
-            <span class="badge ok" style="font-size: 0.65rem; letter-spacing: 0.05em;">MÊS CORRENTE</span>
-          {% else %}
-            <span class="badge" style="background: #e2e8f0; color: #475569; font-size: 0.65rem; letter-spacing: 0.05em;">MÊS FECHADO</span>
+            <br><span style="font-size: 0.6rem; color: var(--green); font-weight: 800; letter-spacing: 0.05em;">MÊS CORRENTE</span>
           {% endif %}
+        </td>
+        <td>
+          <span class="badge" style="background: #e2e8f0; color: #475569; font-size: 0.65rem; letter-spacing: 0.05em;">
+            {{ row.competition_code }}
+          </span>
         </td>
         <td>{{ row.branch_name }}</td>
         <td>{{ row.bet_count }}</td>
