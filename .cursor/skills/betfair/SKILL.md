@@ -31,19 +31,23 @@ Skill de contexto e workflow. Leia [context.md](context.md) antes de propor cód
 | Exchange | API oficial descartada; hipótese sessão browser (P&D) |
 | Público MVP | Apenas o fundador (validação privada) |
 | Esporte | Futebol |
-| Mercados MVP | Over 0,5 + Over 1,5 (filiais) |
-| Filosofia | **Anti-zero-gols** — exclusão por dados, nunca presumir |
+| Mercados MVP | Over 0,5 + Over 1,5 + Over 2,5 (Prioridade Total) |
+| Filosofia | **Foco em Gols** — Priorizar mercados Over; descartar se houver dúvida ou falta de dados |
 | Filiais | Cada tipo de entrada = unidade com P&L próprio |
-| Stack | Python para dados/ML; frontend a definir |
+| Saída Homologada | Apenas mercados de Gols com base sólida fundamentada |
+| Saída Alternativa | Vencedor (1X2) e Lay Correct Score (decisão do apostador) |
+| Stack | Python para dados/ML; frontend FastAPI + HTMX |
 
 ## Princípios de produto
 
-1. **Explicabilidade primeiro** — toda indicação mostra *como* chegou lá (variáveis, pesos, tendências).
-2. **Três cenários sempre** — pessimista, realista, otimista; nunca uma única linha sem contexto.
-3. **Dados antes de modelo** — pipeline de ingestão e qualidade antes de ML fancy.
-4. **Validação privada** — track record antes de qualquer exposição pública.
-5. **APIs free first** — cache agressivo; respeitar rate limits (ex.: 100 req/dia API-Football).
-6. **Anti-zero-gols** — filtro de exclusão antes de qualquer indicação; sem dados = sem pick.
+1. **Prioridade Máxima: GOLS** — O produto busca Gols (Over 0.5, 1.5, 2.5). Esta é a base do Palpitaria FC.
+2. **Base Fundamentada ou Descarte** — Nunca deduzir sem base sólida. Se houver dúvida ou dados insuficientes, **descarte** o palpite.
+3. **Homologada vs Alternativa** — Apenas mercados de Gols entram como "Homologadas". Mercados de Vencedor (1X2) são estritamente "Alternativos", a menos que haja um favorito absoluto com base de dados massiva.
+4. **Explicabilidade primeiro** — toda indicação mostra *como* chegou lá (variáveis, pesos, tendências).
+5. **Três cenários sempre** — pessimista, realista, otimista; nunca uma única linha sem contexto.
+6. **Dados antes de modelo** — pipeline de ingestão e qualidade antes de ML fancy.
+7. **Validação privada** — track record antes de qualquer exposição pública.
+8. **Anti-zero-gols** — filtro de exclusão antes de qualquer indicação; sem dados = sem pick.
 
 ## Pipeline de decisão (gols)
 

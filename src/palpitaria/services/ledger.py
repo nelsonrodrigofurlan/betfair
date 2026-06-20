@@ -157,7 +157,12 @@ def close_past_months(db: Session) -> list[BranchMonthlySummary]:
         losses = sum(1 for b in branch_bets if b.outcome == "LOSS")
         pending = sum(1 for b in branch_bets if b.outcome == "PENDING")
         total_pl = round(sum(b.profit_loss for b in branch_bets), 2)
-        total_stake = round(sum(b.stake for b in branch_bets), 2)
+        
+        # Se for LAY, a stake (risco) é a responsabilidade
+        if branch and branch.side == "LAY":
+            total_stake = round(sum(b.stake * (b.odds - 1) for b in branch_bets), 2)
+        else:
+            total_stake = round(sum(b.stake for b in branch_bets), 2)
 
         summary = BranchMonthlySummary(
             branch_id=branch_id,

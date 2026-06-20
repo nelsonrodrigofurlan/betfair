@@ -114,7 +114,12 @@
         </td>
         <td class="fail">{{ row.loss_count }}</td>
         <td>{{ row.pending_count }}</td>
-        <td>{{ "%.2f"|format(row.total_stake) }}</td>
+        <td>
+          {{ "%.2f"|format(row.total_stake) }}
+          {% if row.side == 'LAY' %}
+            <br><span style="font-size: 0.6rem; color: var(--muted); font-weight: 600;">(RISCO)</span>
+          {% endif %}
+        </td>
         <td class="{% if row.total_pl >= 0 %}pass{% else %}fail{% endif %}">
           {{ "%.2f"|format(row.total_pl) }}
         </td>

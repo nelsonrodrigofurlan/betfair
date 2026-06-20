@@ -159,6 +159,8 @@ def analyze_fixture(db: Session, fixture: Fixture) -> FixtureAnalysis:
 
     home = fixture.home_team
     away = fixture.away_team
+    comp_code = fixture.competition_code or settings.world_cup_code
+
     analysis = FixtureAnalysis(
         fixture_id=fixture.id,
         external_id=fixture.external_id,
@@ -185,10 +187,15 @@ def analyze_fixture(db: Session, fixture: Fixture) -> FixtureAnalysis:
         _attach_criteria_brief(analysis)
         return analysis
 
-    if home_profile.matches_sampled < 1 or away_profile.matches_sampled < 1:
+    # Regra de Amostragem: 
+    # Para ligas regulares (BSA, PL, etc.), exigimos 3 jogos. 
+    # Para torneios curtos (Copa do Mundo), aceitamos 1 jogo.
+    min_games = 1 if comp_code == "WC" else 3
+    if home_profile.matches_sampled < min_games or away_profile.matches_sampled < min_games:
         analysis.excluded = True
         analysis.exclusion_reasons.append(
-            f"Amostra insuficiente ({home_profile.matches_sampled}/{away_profile.matches_sampled} jogos)"
+            f"Base de dados reduzida ({home_profile.matches_sampled} vs {away_profile.matches_sampled} jogos). "
+            f"Para este campeonato, o produto exige pelo menos {min_games} jogo(s) por seleção."
         )
         _attach_criteria_brief(analysis, home_profile, away_profile)
         return analysis
@@ -570,12 +577,16 @@ def _winner_pick(
     away_profile,
     *,
     scope: str,
-    strong_verdict_rate: float = 0.70,
+    strong_verdict_rate: float = 0.90,  # Aumentado para 0.90
 ) -> dict | None:
     fav = infer_favorite(analysis, home_profile, away_profile)
     if fav is None:
         return None
-    verdict = "STRONG" if fav.strength >= strong_verdict_rate else "CANDIDATE"
+    
+    # Se a amostra for pequena, nunca dar veredito STRONG para vencedor
+    n_min = min(home_profile.matches_sampled, away_profile.matches_sampled)
+    verdict = "STRONG" if (fav.strength >= strong_verdict_rate and n_min >= 10) else "CANDIDATE"
+    
     prefix = "Fora do filtro de gols, mas " if scope == "alternate" else ""
     return {
         "market": f"VITÓRIA: {fav.name}",
@@ -598,11 +609,12 @@ def _select_best_pick(
     confidence = analysis.goal_potential_score
     over_15_rate = min(home_profile.over_15_rate, away_profile.over_15_rate)
     over_25_rate = min(home_profile.over_25_rate, away_profile.over_25_rate)
+    n_min = min(home_profile.matches_sampled, away_profile.matches_sampled)
 
-    # Lógica de decisão para a ÚNICA melhor recomendação
+    # Lógica de decisão para a ÚNICA melhor recomendação (PRIORIDADE TOTAL: GOLS)
     
     # 1. Prioridade Máxima: Chuva de Gols (Over 2.5)
-    if combined_avg >= 3.2 and over_25_rate >= 0.55 and confidence >= 95:
+    if combined_avg >= 3.2 and over_25_rate >= 0.55 and confidence >= 95 and n_min >= 2:
         return {
             "market": "OVER 2.5 GOALS",
             "verdict": "STRONG",
@@ -610,27 +622,36 @@ def _select_best_pick(
             "scope": "goals",
         }
 
-    # 2. Dominância Clara (1X2)
-    winner = _winner_pick(
-        analysis, home_profile, away_profile, scope="goals", strong_verdict_rate=0.75
-    )
-    if winner and confidence >= 90 and infer_favorite(analysis, home_profile, away_profile).strength >= 0.35:
-        return winner
-
-    # 3. Segurança no Over 1.5
-    if over_15_rate >= 0.72 and combined_avg >= 2.4 and confidence >= 90:
+    # 2. Segurança no Over 1.5 (Core do Produto)
+    if over_15_rate >= 0.72 and combined_avg >= 2.4 and confidence >= 90 and n_min >= 1:
         return {
             "market": "OVER 1.5 GOALS",
-            "verdict": "STRONG",
+            "verdict": "STRONG" if n_min >= 2 else "CANDIDATE",
             "reason": f"Histórico sólido de pelo menos 2 gols ({over_15_rate:.0%}) com média combinada de {combined_avg:.1f}.",
             "scope": "goals",
         }
 
-    # 4. Base de Segurança: Over 0.5 (Anti-Zero-Gols)
+    # 3. Base de Segurança: Over 0.5 (Anti-Zero-Gols)
+    if confidence >= 85 and n_min >= 1:
+        return {
+            "market": "OVER 0.5 GOALS",
+            "verdict": "STRONG" if n_min >= 2 else "CANDIDATE",
+            "reason": f"Filtro anti-zero-gols aprovado com Score {confidence}. Média combinada de {combined_avg:.1f} gols/jogo.",
+            "scope": "goals",
+        }
+
+    # 4. Dominância Absoluta (1X2) - APENAS como último recurso se gols não forem claros e base for massiva
+    winner = _winner_pick(
+        analysis, home_profile, away_profile, scope="goals", strong_verdict_rate=0.95
+    )
+    if winner and winner["verdict"] == "STRONG" and n_min >= 10:
+        return winner
+
+    # Fallback para candidato a gol se nada acima for "STRONG"
     return {
         "market": "OVER 0.5 GOALS",
-        "verdict": "STRONG" if confidence >= 85 else "CANDIDATE",
-        "reason": f"Filtro anti-zero-gols aprovado com Score {confidence}. Média combinada de {combined_avg:.1f} gols/jogo.",
+        "verdict": "CANDIDATE",
+        "reason": f"Análise fundamentada para mercado de gols (Score {confidence}).",
         "scope": "goals",
     }
 
@@ -644,12 +665,14 @@ def _select_alternate_pick(
     avg_btts: float,
 ) -> dict:
     """Palpite fora do filtro de gols — 1X2 ou lay correct score."""
+    # Vencedor entra aqui como alternativa na maioria dos casos
     winner = _winner_pick(analysis, home_profile, away_profile, scope="alternate")
     if winner:
         return winner
 
     home_win_rate = home_profile.win_rate
     away_win_rate = away_profile.win_rate
+    n_min = min(home_profile.matches_sampled, away_profile.matches_sampled)
 
     if max_zero_zero >= settings.max_zero_zero_rate or avg_btts < settings.min_both_score_rate:
         return {

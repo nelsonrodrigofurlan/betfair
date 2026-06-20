@@ -84,6 +84,9 @@ def apply_schema_migrations() -> None:
                 text("ALTER TABLE users ADD COLUMN IF NOT EXISTS total_withdrawals FLOAT DEFAULT 0.0")
             )
             conn.execute(
+                text("ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_comp_code VARCHAR(10)")
+            )
+            conn.execute(
                 text(
                     "UPDATE branches SET side = 'LAY' WHERE "
                     "lower(name) LIKE '%correct score%' OR lower(slug) LIKE '%correct%score%' "

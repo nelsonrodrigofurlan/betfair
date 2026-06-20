@@ -36,6 +36,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     total_deposits: Mapped[float] = mapped_column(Float, default=0.0)
     total_withdrawals: Mapped[float] = mapped_column(Float, default=0.0)
+    favorite_comp_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     branches: Mapped[list["Branch"]] = relationship(back_populates="user")
     insights: Mapped[list["UserInsight"]] = relationship(back_populates="user")

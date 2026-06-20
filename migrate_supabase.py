@@ -90,6 +90,9 @@ def migrate_to_supabase():
             conn.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_withdrawals FLOAT DEFAULT 0.0"
             ))
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_comp_code VARCHAR(10)"
+            ))
 
         # 0. Seed Users
         print("Seeding users...")

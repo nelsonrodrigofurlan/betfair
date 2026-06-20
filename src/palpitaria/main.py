@@ -202,16 +202,19 @@ def update_competition_odds(db: Session, comp_code: str):
             comp.odds_json = json.dumps(odds_list)
             db.commit()
 
-def _render_home(request: Request, db: Session, comp_code: str | None = None) -> HTMLResponse:
+def _render_home(request: Request, db: Session, user, comp_code: str | None = None) -> HTMLResponse:
     from palpitaria.models import FixtureReport, Competition
     localize_existing_teams(db)
     
     # Buscar competições ativas
     active_comps = db.query(Competition).filter_by(is_active=True).all()
     
-    # Se não houver código, pega a primeira ativa ou default WC
+    # Se não houver código, tenta o favorito do usuário, senão pega a primeira ativa ou default WC
     if not comp_code:
-        comp_code = active_comps[0].code if active_comps else "WC"
+        if user and user.favorite_comp_code:
+            comp_code = user.favorite_comp_code
+        else:
+            comp_code = active_comps[0].code if active_comps else "WC"
         
     today = get_today_context()
     analyses = analyze_upcoming(db, limit=50, for_today_only=True, competition_code=comp_code)
@@ -255,6 +258,7 @@ def _render_home(request: Request, db: Session, comp_code: str | None = None) ->
             "active_comps": active_comps,
             "current_comp": comp_code,
             "betfair_odds": odds_list,
+            "user": user,
         },
     )
 
@@ -298,7 +302,7 @@ def logout(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, comp: str | None = None, db: Session = Depends(get_db), user=Depends(login_required)) -> HTMLResponse:
-    return _render_home(request, db, comp_code=comp)
+    return _render_home(request, db, user, comp_code=comp)
 
 
 @app.post("/sync", response_class=HTMLResponse)
@@ -709,7 +713,10 @@ def list_branches(request: Request, comp: str | None = None, db: Session = Depen
 
     # Buscar competições ativas
     active_comps = db.query(Competition).filter_by(is_active=True).all()
-    comp_code = comp or (active_comps[0].code if active_comps else "WC")
+    if not comp:
+        comp_code = user.favorite_comp_code or (active_comps[0].code if active_comps else "WC")
+    else:
+        comp_code = comp
 
     # Filtrar filiais do usuário
     branches = db.query(Branch).filter(Branch.user_id == user.id).all()
@@ -759,6 +766,7 @@ def list_branches(request: Request, comp: str | None = None, db: Session = Depen
             "app_timezone": settings.app_timezone,
             "active_comps": active_comps,
             "current_comp": comp_code,
+            "user": user,
         }
     )
 
@@ -802,7 +810,13 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
         losses = sum(1 for bet in bets if bet.outcome == "LOSS")
         pending = sum(1 for bet in bets if bet.outcome == "PENDING")
         total_pl = sum(bet.profit_loss for bet in bets)
-        total_stake = sum(bet.stake for bet in bets)
+        
+        # Se for LAY, a stake (risco) é a responsabilidade
+        if b.side == "LAY":
+            total_stake = sum(bet.stake * (bet.odds - 1) for bet in bets)
+        else:
+            total_stake = sum(bet.stake for bet in bets)
+            
         bet_count = len(bets)
         
         # Coletar códigos de competição para o mês ativo
@@ -821,14 +835,15 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
             "hit_rate_pct": hit_rate_pct(wins, bet_count),
             "closed_at": None,
             "competition_code": comp_label,
-            "is_active": True
+            "is_active": True,
+            "side": b.side
         })
 
     # 3. Adicionar fechamentos passados (Consolidando competições se houver)
     consolidated = defaultdict(lambda: {
         "bet_count": 0, "win_count": 0, "loss_count": 0, "pending_count": 0,
         "total_stake": 0.0, "total_pl": 0.0, "closed_at": None, "branch_name": "",
-        "comp_codes": set()
+        "comp_codes": set(), "side": "BACK"
     })
     
     for s in summaries:
@@ -841,6 +856,7 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
         d["total_stake"] += s.total_stake
         d["total_pl"] += s.total_pl
         d["branch_name"] = s.branch.name if s.branch else f"Filial #{s.branch_id}"
+        d["side"] = s.branch.side if s.branch else "BACK"
         d["comp_codes"].add(s.competition_code)
         if not d["closed_at"] or s.closed_at > d["closed_at"]:
             d["closed_at"] = s.closed_at
@@ -862,7 +878,8 @@ def list_historico(request: Request, db: Session = Depends(get_db), user=Depends
             "hit_rate_pct": hit_rate_pct(d["win_count"], d["bet_count"]),
             "closed_at": d["closed_at"],
             "competition_code": comp_label,
-            "is_active": False
+            "is_active": False,
+            "side": d["side"]
         })
 
     # Calcular somas gerais
@@ -898,6 +915,24 @@ async def update_finance(
         db_user.total_withdrawals = withdrawals
         db.commit()
     return RedirectResponse(url="/historico", status_code=303)
+
+
+@app.post("/user/favorite-comp")
+async def set_favorite_comp(
+    request: Request,
+    comp_code: str = Form(...),
+    db: Session = Depends(get_db),
+    user=Depends(login_required)
+):
+    from palpitaria.models import User
+    db_user = db.query(User).filter(User.id == user.id).first()
+    if db_user:
+        db_user.favorite_comp_code = comp_code
+        db.commit()
+    
+    # Redirecionar de volta para onde estava, mantendo o parâmetro comp se necessário
+    referer = request.headers.get("Referer", "/")
+    return RedirectResponse(url=referer, status_code=303)
 
 
 @app.get("/ia-historico", response_class=HTMLResponse)
@@ -1158,8 +1193,8 @@ def list_ciclos(request: Request, db: Session = Depends(get_db), user=Depends(lo
     
     next_target_pct = calculate_next_step_target(active_cycle) if active_cycle else 5.0
     
-    # Sugestões de jogos para o ciclo (jogos de hoje com 6/6 OK ou alta pontuação)
-    upcoming = analyze_upcoming(db, limit=10, for_today_only=True)
+    # Sugestões de jogos para o ciclo (próximos 3 dias)
+    upcoming = analyze_upcoming(db, limit=10, days=3)
     suggestions = [a for a in upcoming if not a.excluded and a.goal_potential_score >= 0.8]
 
     cy, cm = current_period()

@@ -7,13 +7,19 @@
       <h1>🏢 Gestão de Filiais</h1>
       <p class="sub">Acompanhe o P&L de cada mercado separadamente · <strong>Mês ativo: {{ current_period }}</strong></p>
     </div>
-    <div style="display: flex; align-items: center; gap: 1rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
+    <div style="display: flex; align-items: center; gap: 0.75rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
       <span style="font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Campeonato:</span>
       <select name="comp" onchange="window.location.href='/branches?comp=' + this.value" style="border: none; background: transparent; font-weight: 700; color: var(--blue); cursor: pointer; font-size: 1rem; outline: none;">
         {% for comp in active_comps %}
           <option value="{{ comp.code }}" {% if current_comp == comp.code %}selected{% endif %}>{{ comp.name }}</option>
         {% endfor %}
       </select>
+      <form action="/user/favorite-comp" method="POST" style="margin: 0; display: flex; align-items: center;">
+        <input type="hidden" name="comp_code" value="{{ current_comp }}">
+        <button type="submit" title="Definir como campeonato padrão" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 1.1rem; filter: {% if user.favorite_comp_code == current_comp %}none{% else %}grayscale(1) opacity(0.4){% endif %}; transition: all 0.2s;" onmouseover="this.style.filter='none'; this.style.opacity='1'" onmouseout="{% if user.favorite_comp_code != current_comp %}this.style.filter='grayscale(1) opacity(0.4)'{% endif %}">
+          📌
+        </button>
+      </form>
     </div>
   </div>
 </header>
