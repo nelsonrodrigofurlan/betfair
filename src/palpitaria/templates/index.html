@@ -47,26 +47,10 @@
         🚀 Atualizar Tudo (Sincronizar + Perfis + Leituras)
       </button>
     </form>
+    <button type="button" onclick="showSummaryModal()" style="background: #6366f1; color: white; font-weight: 700; padding: 0.75rem 2rem; border-radius: 12px; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; box-shadow: var(--shadow);">
+      📸 Resumo para Grupo
+    </button>
   {% else %}
-    <div style="display: flex; gap: 1rem; opacity: 0.5; pointer-events: none; filter: grayscale(1);">
-      <button type="button" disabled>🚀 Atualizar Tudo</button>
-    </div>
-    <div class="alert" style="background: #f1f5f9; border-color: #cbd5e1; color: #475569; display: flex; align-items: center; gap: 1.5rem; padding: 1.5rem; margin-top: 1rem;">
-      <img src="/static/assets/o_pai_caricatura.png" alt="O Pai" style="height: 100px; width: auto; border-radius: 12px; mix-blend-mode: multiply;">
-      <div>
-        <strong style="display: block; font-size: 1.1rem; margin-bottom: 0.25rem;">✋ Acesso Restrito</strong>
-        <p style="margin: 0; font-size: 0.95rem;">Se quiser rodar o analitico de hoje, tem que pedir benção pro Pai</p>
-        {% if last_analysis_at %}
-        <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted);">
-          🕒 Última atualização global: <strong>{{ last_analysis_at | kickoff(app_timezone) }}</strong>
-        </p>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
-  <button type="button" onclick="showSummaryModal()" style="background: #6366f1; color: white; font-weight: 700; padding: 0.75rem 2rem; border-radius: 12px; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; box-shadow: var(--shadow);">
-    📸 Resumo para Grupo
-  </button>
   <p class="sub" style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--muted);">
     A atualização completa sincroniza o calendário, atualiza perfis técnicos e coleta bastidores/clima via web para gerar as recomendações IA.
     Requer <code>OPENAI_API_KEY</code>. O processo total pode levar de 5 a 10 min.
@@ -355,10 +339,10 @@
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background-image: url('/static/assets/logo.png');
-    background-size: 300px;
+    background-size: 450px;
     background-repeat: no-repeat;
     background-position: center;
-    opacity: 0.03;
+    opacity: 0.05;
     z-index: 0;
     pointer-events: none;
   }
@@ -459,8 +443,8 @@
     <div class="summary-bg"></div>
     <div class="summary-inner">
       <div class="summary-header">
-        <img src="/static/assets/logo.png" alt="Palpitaria FC" style="height: 40px; margin-bottom: 0.5rem;">
-        <h2 style="color: #1e293b; margin: 0; font-size: 1.1rem; font-weight: 800;">PALPITES DE HOJE — {{ today_label }}</h2>
+        <img src="/static/assets/logo.png" alt="Palpitaria FC" style="height: 85px; width: auto; margin-bottom: 1rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">
+        <h2 style="color: #1e293b; margin: 0; font-size: 1.2rem; font-weight: 900; letter-spacing: -0.02em;">PALPITES DE HOJE — {{ today_label }}</h2>
       </div>
 
       {% if candidates %}
@@ -499,14 +483,60 @@
     </div>
   </div>
   <div class="summary-footer">
-    <a href="#" id="whatsapp-share-link" class="whatsapp-btn" onclick="shareToWhatsApp(event)">
-      <span>🟢 Enviar para WhatsApp</span>
-    </a>
+    <button type="button" class="whatsapp-btn" onclick="generateAndShareImage()">
+      <span>🟢 Gerar e Enviar Imagem</span>
+    </button>
+    <a href="#" id="whatsapp-share-link" style="display: none;" onclick="shareToWhatsApp(event)"></a>
     <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">Palpitaria FC — Inteligência para Gols</span>
   </div>
 </div>
 
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 <script>
+  async function generateAndShareImage() {
+    const modal = document.getElementById('summary-modal');
+    const content = modal.querySelector('.summary-content');
+    const closeBtn = modal.querySelector('.close-summary');
+    const footer = modal.querySelector('.summary-footer');
+
+    // Esconde botões para o print
+    closeBtn.style.visibility = 'hidden';
+    footer.style.visibility = 'hidden';
+
+    try {
+      const canvas = await html2canvas(content, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: '#f8fafc'
+      });
+
+      canvas.toBlob(async (blob) => {
+        const dateStr = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+        const fileName = `PalpitariaFC-${dateStr}.png`;
+        const file = new File([blob], fileName, { type: 'image/png' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'Palpites Palpitaria FC',
+          });
+        } else {
+          const link = document.createElement('a');
+          link.download = fileName;
+          link.href = URL.createObjectURL(blob);
+          link.click();
+          alert('Imagem gerada com sucesso! Como o compartilhamento direto de arquivos não é suportado neste navegador, a imagem foi baixada para você enviar manualmente.');
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao gerar imagem.');
+    } finally {
+      closeBtn.style.visibility = 'visible';
+      footer.style.visibility = 'visible';
+    }
+  }
+
   function shareToWhatsApp(e) {
     e.preventDefault();
     let text = "*⚽ PALPITARIA FC — {{ today_label }}*\n\n";
