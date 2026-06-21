@@ -51,10 +51,22 @@
       📸 Resumo para Grupo
     </button>
   {% else %}
-  <p class="sub" style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--muted);">
-    A atualização completa sincroniza o calendário, atualiza perfis técnicos e coleta bastidores/clima via web para gerar as recomendações IA.
-    Requer <code>OPENAI_API_KEY</code>. O processo total pode levar de 5 a 10 min.
-  </p>
+    <div style="display: flex; gap: 1rem; opacity: 0.5; pointer-events: none; filter: grayscale(1);">
+      <button type="button" disabled>🚀 Atualizar Tudo</button>
+    </div>
+    <div class="alert" style="background: #f1f5f9; border-color: #cbd5e1; color: #475569; display: flex; align-items: center; gap: 1.5rem; padding: 1.5rem; margin-top: 1rem;">
+      <img src="/static/assets/o_pai_caricatura.png" alt="O Pai" style="height: 100px; width: auto; border-radius: 12px; mix-blend-mode: multiply;">
+      <div>
+        <strong style="display: block; font-size: 1.1rem; margin-bottom: 0.25rem;">✋ Acesso Restrito</strong>
+        <p style="margin: 0; font-size: 0.95rem;">Se quiser rodar o analitico de hoje, tem que pedir benção pro Pai</p>
+        {% if last_analysis_at %}
+        <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted);">
+          🕒 Última atualização global: <strong>{{ last_analysis_at | kickoff(app_timezone) }}</strong>
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 </div>
 
 <div id="sync-result" aria-live="polite" aria-busy="false"></div>
@@ -442,44 +454,51 @@
   <div class="summary-content">
     <div class="summary-bg"></div>
     <div class="summary-inner">
-      <div class="summary-header">
-        <img src="/static/assets/logo.png" alt="Palpitaria FC" style="height: 85px; width: auto; margin-bottom: 1rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">
-        <h2 style="color: #1e293b; margin: 0; font-size: 1.2rem; font-weight: 900; letter-spacing: -0.02em;">PALPITES DE HOJE — {{ today_label }}</h2>
-      </div>
+    <div class="summary-header">
+      <img src="/static/assets/logo.png" alt="Palpitaria FC" style="height: 85px; width: auto; margin-bottom: 1rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">
+      <h2 style="color: #1e293b; margin: 0; font-size: 1.2rem; font-weight: 900; letter-spacing: -0.02em;">PALPITES DE HOJE — {{ today_label }}</h2>
+    </div>
 
-      {% if candidates %}
-      <div class="summary-section">
-        <h3>🔥 Homologadas (Gols)</h3>
-        {% for a in candidates %}
-          {% if a.best_pick %}
-          <div class="summary-item" style="border-left: 4px solid #22c55e;">
-            <div class="summary-item-title">{{ a.home_name }} x {{ a.away_name }}</div>
-            <div class="summary-item-market">{{ a.best_pick.market }}</div>
-            <div class="summary-item-meta">
-              🎯 Confiança: {{ a.goal_potential_score }}% | ⏰ {{ a.utc_date | kickoff(app_timezone) }}
-            </div>
+    {% if candidates %}
+    <div class="summary-section">
+      <h3>🔥 Homologadas (Gols)</h3>
+      {% for a in candidates %}
+        {% if a.best_pick %}
+        <div class="summary-item" style="border-left: 4px solid #22c55e;">
+          <div class="summary-item-title">{{ a.home_name }} x {{ a.away_name }}</div>
+          <div class="summary-item-market">{{ a.best_pick.market }}</div>
+          <div class="summary-item-meta">
+            🎯 Confiança: {{ a.goal_potential_score }}% | ⏰ {{ a.utc_date | kickoff(app_timezone) }}
           </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-      {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
 
-      {% if discarded %}
-      <div class="summary-section">
-        <h3>🎲 Alternativas</h3>
-        {% for a in discarded %}
-          {% if a.best_pick %}
-          <div class="summary-item" style="border-left: 4px solid #eab308;">
-            <div class="summary-item-title">{{ a.home_name }} x {{ a.away_name }}</div>
-            <div class="summary-item-market">{{ a.best_pick.market }}</div>
-            <div class="summary-item-meta">
-              ℹ️ Alternativo | ⏰ {{ a.utc_date | kickoff(app_timezone) }}
-            </div>
+    {% if discarded %}
+    <div class="summary-section">
+      <h3>🎲 Alternativas</h3>
+      {% for a in discarded %}
+        {% if a.best_pick %}
+        <div class="summary-item" style="border-left: 4px solid #eab308;">
+          <div class="summary-item-title">{{ a.home_name }} x {{ a.away_name }}</div>
+          <div class="summary-item-market">{{ a.best_pick.market }}</div>
+          <div class="summary-item-meta">
+            ℹ️ Alternativo | ⏰ {{ a.utc_date | kickoff(app_timezone) }}
           </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-      {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+      
+    <div style="text-align: center; margin-top: 2rem; opacity: 0.8;">
+      <img src="/static/assets/mascots/mascot_sniper.png" alt="Sniper" style="height: 120px; width: auto;">
+      <p style="font-size: 0.8rem; color: #64748b; font-weight: 800; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em;">
+        Análise Blindada · Palpitaria FC
+      </p>
+    </div>
     </div>
   </div>
   <div class="summary-footer">

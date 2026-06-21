@@ -663,7 +663,7 @@ def _select_alternate_pick(
     combined_avg: float,
     max_zero_zero: float,
     avg_btts: float,
-) -> dict:
+) -> dict | None:
     """Palpite fora do filtro de gols — 1X2 ou lay correct score."""
     # Vencedor entra aqui como alternativa na maioria dos casos
     winner = _winner_pick(analysis, home_profile, away_profile, scope="alternate")
@@ -674,26 +674,23 @@ def _select_alternate_pick(
     away_win_rate = away_profile.win_rate
     n_min = min(home_profile.matches_sampled, away_profile.matches_sampled)
 
-    if max_zero_zero >= settings.max_zero_zero_rate or avg_btts < settings.min_both_score_rate:
+    # Critério estrito para Lay 0-0:
+    # 1. Precisa ter pelo menos 2 jogos de amostra (segurança mínima)
+    # 2. Risco de 0-0 deve ser moderado, não altíssimo (senão é perigoso até para Lay)
+    # 3. Média de gols combinada não pode ser ridícula (ex: < 1.2)
+    if n_min >= 2 and combined_avg >= 1.5 and max_zero_zero <= 0.30:
         return {
             "market": "LAY CORRECT SCORE: 0-0",
             "verdict": "CANDIDATE",
             "reason": (
-                f"Risco elevado de jogo fechado (0-0 em {max_zero_zero:.0%} ou BTTS {avg_btts:.0%}). "
-                "Lay no placar exato 0-0 como leitura alternativa — não é entrada no filtro de gols."
+                f"Leitura alternativa: Média combinada de {combined_avg:.1f} gols e histórico controlado de 0-0 ({max_zero_zero:.0%}). "
+                "Cenário para buscar pelo menos um gol fora do filtro principal."
             ),
             "scope": "alternate",
         }
 
-    return {
-        "market": "LAY CORRECT SCORE: 0-0",
-        "verdict": "CANDIDATE",
-        "reason": (
-            f"Sem favorito claro (vitórias {home_win_rate:.0%} x {away_win_rate:.0%}). "
-            "Lay 0-0 como leitura conservadora fora dos mercados Over."
-        ),
-        "scope": "alternate",
-    }
+    # Se o jogo for muito ruim (ex: times que não marcam nada), retorna None (Descarte Total)
+    return None
 
 
 def analyze_upcoming(

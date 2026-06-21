@@ -32,18 +32,30 @@ Skill de contexto e workflow. Leia [context.md](context.md) antes de propor cód
 | Público MVP | Apenas o fundador (validação privada) |
 | Esporte | Futebol |
 | Mercados MVP | Over 0,5 + Over 1,5 + Over 2,5 (Prioridade Total) |
-| Filosofia | **Foco em Gols** — Priorizar mercados Over; descartar se houver dúvida ou falta de dados |
+| Filosofia | **Foco em Gols** — Priorizar mercados Over; **Liberdade de Descarte Total** se houver dúvida ou dados insuficientes |
 | Filiais | Cada tipo de entrada = unidade com P&L próprio |
 | Saída Homologada | Apenas mercados de Gols com base sólida fundamentada |
-| Saída Alternativa | Vencedor (1X2) e Lay Correct Score (decisão do apostador) |
+| Saída Alternativa | Vencedor (1X2) e Lay Correct Score (apenas se houver critério mínimo; senão descarta) |
+| Especialização | **Skills por Campeonato** — Ver pasta `.cursor/skills/competitions/` |
 | Stack | Python para dados/ML; frontend FastAPI + HTMX |
+
+## Especialização por Campeonato
+
+O Palpitaria FC opera com "Módulos de Especialista" para cada competição, pois cada uma possui dinâmicas únicas:
+
+- **Copa do Mundo (WC)**: Foco em amostras curtas, perfil híbrido (API+Web) e volatilidade. Ver `.cursor/skills/competitions/WC.md`.
+- **Brasileirão (BSA)**: Foco em pontos corridos, mando de campo e amostras longas. Ver `.cursor/skills/competitions/BSA.md`.
+- **Copa do Brasil (CDB)**: Foco em mata-mata, motivação e rotação de elenco. Ver `.cursor/skills/competitions/CDB.md`.
+
+Ao analisar um jogo, identifique o `competition_code` e aplique as regras do especialista correspondente.
 
 ## Princípios de produto
 
 1. **Prioridade Máxima: GOLS** — O produto busca Gols (Over 0.5, 1.5, 2.5). Esta é a base do Palpitaria FC.
 2. **Base Fundamentada ou Descarte** — Nunca deduzir sem base sólida. Se houver dúvida ou dados insuficientes, **descarte** o palpite.
-3. **Homologada vs Alternativa** — Apenas mercados de Gols entram como "Homologadas". Mercados de Vencedor (1X2) são estritamente "Alternativos", a menos que haja um favorito absoluto com base de dados massiva.
-4. **Explicabilidade primeiro** — toda indicação mostra *como* chegou lá (variáveis, pesos, tendências).
+3. **Homologada vs Alternativa** — Apenas mercados de Gols entram como "Homologadas". Mercados de Vencedor (1X2) e Lay Correct Score são estritamente "Alternativos", a menos que haja um favorito absoluto com base de dados massiva.
+4. **Liberdade de Descarte** — O sistema não é obrigado a palpitar 100% dos jogos. Se um jogo for diagnosticado como "muito abaixo" estatisticamente, ele deve ser descartado totalmente, não aparecendo nem como alternativa.
+5. **Explicabilidade primeiro** — toda indicação mostra *como* chegou lá (variáveis, pesos, tendências).
 5. **Três cenários sempre** — pessimista, realista, otimista; nunca uma única linha sem contexto.
 6. **Dados antes de modelo** — pipeline de ingestão e qualidade antes de ML fancy.
 7. **Validação privada** — track record antes de qualquer exposição pública.
