@@ -339,3 +339,21 @@ class CycleStep(Base):
 
     cycle: Mapped["Cycle"] = relationship(back_populates="steps")
     fixture: Mapped["Fixture | None"] = relationship()
+
+
+class ScoutingSource(Base):
+    """Fontes web cadastradas pelo root — entram nas buscas de stalking (global ou por seleção)."""
+
+    __tablename__ = "scouting_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    label: Mapped[str] = mapped_column(String(120))
+    url: Mapped[str] = mapped_column(String(512))
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True, index=True)
+    competition_code: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    team: Mapped["Team | None"] = relationship()

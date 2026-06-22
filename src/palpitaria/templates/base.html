@@ -1014,6 +1014,16 @@
                 💳 Custos
               </a>
             </li>
+            <li class="nav-item">
+              <a href="/admin/skills" class="{% if request.url.path == '/admin/skills' %}active{% endif %}">
+                📚 Skills do Agente
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="/admin/fontes" class="{% if request.url.path == '/admin/fontes' %}active{% endif %}">
+                🔭 Fontes Scouting
+              </a>
+            </li>
           </ul>
         </li>
         {% endif %}

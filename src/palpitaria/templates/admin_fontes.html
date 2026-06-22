@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Fontes de Scouting — Admin{% endblock %}
+{% block content %}
+<header style="margin-bottom: 2rem;">
+  <p class="sub" style="font-size: 1.1rem; font-weight: 600; color: var(--blue); margin-bottom: 0.25rem;">Painel root</p>
+  <h1 style="font-size: 1.5rem; margin: 0;">🔭 Fontes de Scouting</h1>
+  <p style="color: var(--muted); font-size: 0.9rem; margin-top: 0.75rem; max-width: 52rem;">
+    Cadastre sites que você quer que eu priorize nas buscas (bastidores, placares, contexto).
+    <strong>Global</strong> = futebol em geral. <strong>Por seleção</strong> = só quando analiso aquele time (ex.: blog do seu clube do coração).
+  </p>
+</header>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 2rem;">
+  <section class="card" style="padding: 1.5rem;">
+    <h2 style="margin: 0 0 1rem; font-size: 1.05rem;">➕ Nova fonte</h2>
+    <form method="post" action="/admin/fontes/add" style="display: flex; flex-direction: column; gap: 0.85rem;">
+      <div>
+        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem;">Nome (rótulo)</label>
+        <input type="text" name="label" placeholder="Ex: Blog do Timão" required style="width: 100%;">
+      </div>
+      <div>
+        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem;">URL</label>
+        <input type="url" name="url" placeholder="https://..." required style="width: 100%;">
+      </div>
+      <div>
+        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem;">Seleção (opcional)</label>
+        <select name="team_id" style="width: 100%;">
+          <option value="">— Global (futebol em geral) —</option>
+          {% for t in teams %}
+          <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem;">Campeonato (opcional)</label>
+        <select name="competition_code" style="width: 100%;">
+          <option value="">— Todos —</option>
+          {% for c in competitions %}
+          <option value="{{ c.code }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem;">Dica de busca (opcional)</label>
+        <input type="text" name="notes" placeholder="Ex: notícias lesões bastidores" style="width: 100%;">
+        <span style="font-size: 0.72rem; color: var(--muted);">Entra na query DuckDuckGo junto com site:dominio</span>
+      </div>
+      <button type="submit" class="primary" style="margin-top: 0.5rem;">Salvar fonte</button>
+    </form>
+  </section>
+
+  <section class="card" style="padding: 0;">
+    <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid #e2e8f0;">
+      <h2 style="margin: 0; font-size: 1.05rem;">Fontes cadastradas ({{ sources|length }})</h2>
+    </div>
+    {% if sources %}
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Escopo</th>
+            <th>URL</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sources %}
+          <tr>
+            <td><strong>{{ s.label }}</strong>{% if s.notes %}<br><span style="font-size:0.75rem;color:var(--muted);">{{ s.notes }}</span>{% endif %}</td>
+            <td style="font-size: 0.85rem;">
+              {% if s.team %}
+                🏳️ {{ s.team.name }}
+              {% else %}
+                🌍 Global
+              {% endif %}
+              {% if s.competition_code %}<br><span class="badge" style="font-size:0.65rem;">{{ s.competition_code }}</span>{% endif %}
+            </td>
+            <td style="font-size: 0.78rem; max-width: 180px; word-break: break-all;">
+              <a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.url }}</a>
+            </td>
+            <td>
+              {% if s.is_active %}<span class="badge ok">Ativa</span>{% else %}<span class="badge err">Pausada</span>{% endif %}
+            </td>
+            <td style="white-space: nowrap;">
+              <form method="post" action="/admin/fontes/toggle/{{ s.id }}" style="display:inline;">
+                <button type="submit" class="secondary" style="padding:0.3rem 0.5rem;font-size:0.75rem;">{{ 'Pausar' if s.is_active else 'Ativar' }}</button>
+              </form>
+              <form method="post" action="/admin/fontes/delete/{{ s.id }}" style="display:inline;" onsubmit="return confirm('Remover esta fonte?');">
+                <button type="submit" class="secondary" style="padding:0.3rem 0.5rem;font-size:0.75rem;color:#dc2626;">✕</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="padding: 1.5rem; color: var(--muted); margin: 0; font-size: 0.9rem;">
+      Nenhuma fonte extra ainda. As fontes padrão (FIFA, ESPN, Transfermarkt…) continuam ativas no código.
+    </p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

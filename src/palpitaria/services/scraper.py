@@ -100,11 +100,30 @@ def search_web_stalking(
     return merged if len(merged) >= min_total_len else merged
 
 
-def get_search_queries(team_name: str, *, external_id: int | None = None) -> list[str]:
+def get_search_queries(
+    team_name: str,
+    *,
+    external_id: int | None = None,
+    db: Session | None = None,
+    team_id: int | None = None,
+    competition_code: str | None = None,
+) -> list[str]:
     from palpitaria.services.wc_stalking_queries import team_bastidores_queries, team_strength_queries
 
-    return team_bastidores_queries(team_name, external_id=external_id) + team_strength_queries(
+    base = team_bastidores_queries(team_name, external_id=external_id) + team_strength_queries(
         team_name, external_id=external_id
+    )
+    if db is None:
+        return base
+    from palpitaria.services.scouting_preferences import append_scouting_queries
+
+    return append_scouting_queries(
+        db,
+        base,
+        team_id=team_id,
+        team_name=team_name,
+        external_id=external_id,
+        competition_code=competition_code,
     )
 
 
@@ -114,15 +133,22 @@ def get_match_context_queries(
     *,
     home_external_id: int | None = None,
     away_external_id: int | None = None,
+    db: Session | None = None,
+    competition_code: str | None = None,
 ) -> list[str]:
     from palpitaria.services.wc_stalking_queries import match_context_queries
 
-    return match_context_queries(
+    base = match_context_queries(
         home_name,
         away_name,
         home_external_id=home_external_id,
         away_external_id=away_external_id,
     )
+    if db is None:
+        return base
+    from palpitaria.services.scouting_preferences import append_scouting_queries
+
+    return append_scouting_queries(db, base, competition_code=competition_code)
 
 
 def analyze_team_moment(team_name: str, raw_content: str, *, squad: list[str] | None = None) -> dict:
@@ -236,6 +262,8 @@ def collect_match_context(
     external_id: int | None = None,
     home_external_id: int | None = None,
     away_external_id: int | None = None,
+    db: Session | None = None,
+    competition_code: str | None = None,
 ) -> dict:
     ctx = fetch_api_match_context(external_id) if external_id else {}
 
@@ -245,6 +273,8 @@ def collect_match_context(
             away_name,
             home_external_id=home_external_id,
             away_external_id=away_external_id,
+            db=db,
+            competition_code=competition_code,
         ),
         max_results_per_query=4,
     )
@@ -262,9 +292,22 @@ def collect_match_context(
     return _normalize_match_context(ctx)
 
 
-def collect_team_insights(team_name: str, *, team_external_id: int | None = None) -> dict | None:
+def collect_team_insights(
+    team_name: str,
+    *,
+    team_external_id: int | None = None,
+    db: Session | None = None,
+    team_id: int | None = None,
+    competition_code: str | None = None,
+) -> dict | None:
     snippets = search_web_stalking(
-        get_search_queries(team_name, external_id=team_external_id),
+        get_search_queries(
+            team_name,
+            external_id=team_external_id,
+            db=db,
+            team_id=team_id,
+            competition_code=competition_code,
+        ),
         max_results_per_query=4,
     )
     if not snippets:
@@ -298,12 +341,24 @@ def update_team_insights(db: Session, team_id: int, insights: dict) -> bool:
     return True
 
 
-def refresh_team_insights(db: Session, team_id: int, team_name: str) -> dict | None:
+def refresh_team_insights(
+    db: Session,
+    team_id: int,
+    team_name: str,
+    *,
+    competition_code: str | None = None,
+) -> dict | None:
     from palpitaria.models import Team
 
     team = db.query(Team).filter_by(id=team_id).one_or_none()
     external_id = team.external_id if team else None
-    insights = collect_team_insights(team_name, team_external_id=external_id)
+    insights = collect_team_insights(
+        team_name,
+        team_external_id=external_id,
+        db=db,
+        team_id=team_id,
+        competition_code=competition_code,
+    )
     if not insights:
         return None
     update_team_insights(db, team_id, insights)
@@ -323,6 +378,7 @@ def enrich_fixture_analysis(
     home_insights: dict | None,
     away_insights: dict | None,
     log_callback=None,
+    competition_code: str | None = None,
 ) -> tuple[dict | None, dict | None, dict | None]:
     """Coleta bastidores + contexto de jogo antes da recomendação LLM."""
 
@@ -343,11 +399,15 @@ def enrich_fixture_analysis(
         log("  [2/3] Scraping bastidores + contexto de jogo...")
 
     log(f"  [2a] Bastidores — {home_name}...")
-    refreshed_home = refresh_team_insights(db, home_team_id, home_name)
+    refreshed_home = refresh_team_insights(
+        db, home_team_id, home_name, competition_code=competition_code
+    )
     home = refreshed_home or home_insights
 
     log(f"  [2b] Bastidores — {away_name}...")
-    refreshed_away = refresh_team_insights(db, away_team_id, away_name)
+    refreshed_away = refresh_team_insights(
+        db, away_team_id, away_name, competition_code=competition_code
+    )
     away = refreshed_away or away_insights
 
     match_context = None
@@ -358,6 +418,8 @@ def enrich_fixture_analysis(
         external_id=external_id,
         home_external_id=home_ext,
         away_external_id=away_ext,
+        db=db,
+        competition_code=competition_code,
     )
 
     return home, away, match_context

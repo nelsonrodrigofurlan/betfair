@@ -65,7 +65,16 @@ Ao analisar um jogo, identifique o `competition_code` e aplique as regras do esp
 
 - **Janela:** `06:00` → `06:00` do dia seguinte em `America/Sao_Paulo` (`app_day_start_hour=6`).
 - **Leituras / home / pipeline:** só fixtures com kickoff nessa janela (`for_today_only=True`).
-- **Perfis:** passo 2 atualiza seleções do dia **e** faz backfill de quem ficou sem perfil (ex.: Gana, Jordânia, Tunísia) — isso **não** expande análises para jogos passados.
+- **Perfis:** passo 2 atualiza seleções do dia **e** faz backfill de quem ficou sem perfil — isso **não** expande análises para jogos passados.
+
+## Painel root (só fundador)
+
+| Menu | Rota | Função |
+|------|------|--------|
+| Skills do Agente | `/admin/skills` | Lê `.cursor/skills/` em linguagem natural + markdown completo |
+| Fontes Scouting | `/admin/fontes` | URLs extras (global ou por seleção) → queries no stalking |
+
+**Ao criar ou alterar skills:** editar arquivos em `.cursor/skills/`; a página admin reflete pelo `mtime` do arquivo. Novo arquivo `.md` → adicionar resumo em `PLAIN_PURPOSE` em `services/skills_reader.py`.
 
 ## Pipeline de decisão (gols)
 

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Skills do Agente — Admin{% endblock %}
+{% block content %}
+<header style="margin-bottom: 2rem;">
+  <p class="sub" style="font-size: 1.1rem; font-weight: 600; color: var(--blue); margin-bottom: 0.25rem;">Painel root</p>
+  <h1 style="font-size: 1.5rem; margin: 0;">📚 Skills do Agente</h1>
+  <p style="color: var(--muted); font-size: 0.9rem; margin-top: 0.75rem; max-width: 52rem;">
+    Aqui você lê, em linguagem natural, as regras que guio neste projeto.
+    Os arquivos vivem em <code>.cursor/skills/</code> — quando eu atualizo um skill, esta página reflete na hora (data de modificação do arquivo).
+  </p>
+</header>
+
+<div style="display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 1.5rem; align-items: start;">
+  <aside class="card" style="padding: 1rem;">
+    <h2 style="margin: 0 0 1rem; font-size: 0.95rem;">Índice</h2>
+    <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+      {% for skill in skills %}
+      <li>
+        <a href="/admin/skills?doc={{ skill.rel_path | urlencode }}"
+           style="display: block; padding: 0.65rem 0.75rem; border-radius: 10px; text-decoration: none; font-size: 0.85rem; {% if selected and selected.rel_path == skill.rel_path %}background: #eff6ff; border: 1px solid #bfdbfe; font-weight: 700;{% else %}background: #f8fafc; border: 1px solid #e2e8f0;{% endif %}">
+          <div style="color: var(--text);">{{ skill.title }}</div>
+          <div style="font-size: 0.72rem; color: var(--muted); margin-top: 0.2rem;">{{ skill.rel_path }}</div>
+        </a>
+      </li>
+      {% else %}
+      <li style="color: var(--muted); font-size: 0.85rem;">Nenhum skill encontrado em .cursor/skills/</li>
+      {% endfor %}
+    </ul>
+  </aside>
+
+  <section class="card" style="padding: 1.5rem;">
+    {% if selected %}
+    <div style="margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
+      <h2 style="margin: 0 0 0.5rem; font-size: 1.2rem;">{{ selected.title }}</h2>
+      <p style="margin: 0; color: var(--muted); font-size: 0.8rem;">
+        Arquivo: <code>{{ selected.rel_path }}</code>
+        · Atualizado: {{ selected.updated_at | kickoff(app_timezone) }}
+      </p>
+      {% if selected.purpose %}
+      <div style="margin-top: 1rem; padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;">
+        <div style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #166534; margin-bottom: 0.35rem;">Em linguagem natural</div>
+        <p style="margin: 0; font-size: 0.9rem; line-height: 1.55;">{{ selected.purpose }}</p>
+      </div>
+      {% endif %}
+      {% if selected.description and selected.description != selected.purpose %}
+      <p style="margin: 1rem 0 0; font-size: 0.85rem; color: var(--muted);">{{ selected.description }}</p>
+      {% endif %}
+    </div>
+    <article class="skill-doc-body">
+      {{ selected.body_html | safe }}
+    </article>
+    {% else %}
+    <div style="color: var(--muted);">
+      <p style="font-size: 1rem; margin-top: 0;">Selecione um skill à esquerda para ler o conteúdo completo.</p>
+      <p style="font-size: 0.85rem;">Sugestão: comece por <strong>betfair/SKILL.md</strong> e <strong>betfair/context.md</strong>.</p>
+      {% if skills %}
+      <ul style="margin-top: 1.5rem; font-size: 0.9rem; line-height: 1.6;">
+        {% for skill in skills %}
+        <li><strong>{{ skill.title }}</strong> — {{ skill.purpose }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<style>
+  .skill-doc-body { font-size: 0.92rem; line-height: 1.65; color: #334155; }
+  .skill-doc-body h1 { font-size: 1.35rem; margin: 1.25rem 0 0.75rem; }
+  .skill-doc-body h2 { font-size: 1.1rem; margin: 1.1rem 0 0.6rem; color: #1e293b; }
+  .skill-doc-body h3 { font-size: 1rem; margin: 0.9rem 0 0.5rem; }
+  .skill-doc-body p { margin: 0.5rem 0; }
+  .skill-doc-body ul { margin: 0.5rem 0 0.75rem 1.25rem; }
+  .skill-doc-body li { margin: 0.25rem 0; }
+  .skill-doc-body pre {
+    background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 12px;
+    overflow-x: auto; font-size: 0.8rem;
+  }
+  .skill-doc-body code { background: #f1f5f9; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+  .skill-doc-body pre code { background: transparent; padding: 0; }
+  .skill-table-line { font-family: ui-monospace, monospace; font-size: 0.78rem; overflow-x: auto; }
+  @media (max-width: 900px) {
+    div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+  }
+</style>
+{% endblock %}

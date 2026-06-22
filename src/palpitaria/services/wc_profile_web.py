@@ -276,14 +276,25 @@ def build_web_team_profile(
     team: Team,
     *,
     log_callback=None,
+    competition_code: str | None = None,
 ) -> TeamProfile | None:
     def log(msg: str) -> None:
         if log_callback:
             log_callback(msg)
 
     log(f"  Web: buscando histórico — {team.name}...")
-    snippets = search_web_stalking(
+    from palpitaria.services.scouting_preferences import append_scouting_queries
+
+    result_queries = append_scouting_queries(
+        db,
         get_team_results_queries(team.name, team.external_id),
+        team_id=team.id,
+        team_name=team.name,
+        external_id=team.external_id,
+        competition_code=competition_code,
+    )
+    snippets = search_web_stalking(
+        result_queries,
         max_results_per_query=4,
     )
     if not snippets or len(snippets) < 80:
@@ -364,7 +375,9 @@ def enrich_today_team_profiles(
             continue
         if index > 0:
             time.sleep(2.0)
-        profile = build_web_team_profile(db, team, log_callback=log_callback)
+        profile = build_web_team_profile(
+            db, team, log_callback=log_callback, competition_code=competition_code
+        )
         if profile:
             updated += 1
 

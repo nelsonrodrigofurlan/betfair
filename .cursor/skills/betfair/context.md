@@ -129,6 +129,15 @@ A análise roda **somente nos jogos do dia operacional** (`APP_TIMEZONE`, defaul
 
 Futuro: escalações/lesões pré-jogo (API paga ou scraping) entram **no dia do jogo**, antes da leitura LLM.
 
+### Painel root — transparência com o fundador (2026-06-22)
+
+| Recurso | Onde | Para quê |
+|---------|------|----------|
+| **Skills do Agente** | Admin → `/admin/skills` | Ler regras do agente em linguagem natural; espelha `.cursor/skills/` |
+| **Fontes Scouting** | Admin → `/admin/fontes` | Cadastrar URLs (global ou por seleção) que entram nas buscas DuckDuckGo |
+
+O fundador revisa, aprova ou orienta com base nesses textos. Fontes cadastradas **somam** às core-6 (FIFA, ESPN, Transfermarkt…), não substituem.
+
 ### Critérios objetivos — exclusão automática *(sem indicar)*
 
 Jogo **não entra** se qualquer condição for verdadeira (limiares calibráveis com dados):

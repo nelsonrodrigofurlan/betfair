@@ -477,6 +477,7 @@ def _execute_analysis_pipeline(db: Session, comp_code: str):
             home_insights=analysis.home_insights,
             away_insights=analysis.away_insights,
             log_callback=add_log,
+            competition_code=comp_code,
         )
         analysis.home_insights = home_insights
         analysis.away_insights = away_insights
@@ -1520,6 +1521,96 @@ def admin_custos(request: Request, db: Session = Depends(get_db), user=Depends(a
             "app_timezone": settings.app_timezone,
         },
     )
+
+
+@app.get("/admin/skills", response_class=HTMLResponse)
+def admin_skills(
+    request: Request,
+    doc: str | None = None,
+    user=Depends(admin_required),
+):
+    from palpitaria.services.skills_reader import list_skill_docs, read_skill_doc
+
+    skills = list_skill_docs()
+    selected = read_skill_doc(doc) if doc else None
+    return TEMPLATES.TemplateResponse(
+        request,
+        "admin_skills.html",
+        {
+            "skills": skills,
+            "selected": selected,
+            "app_timezone": settings.app_timezone,
+        },
+    )
+
+
+@app.get("/admin/fontes", response_class=HTMLResponse)
+def admin_fontes(request: Request, db: Session = Depends(get_db), user=Depends(admin_required)):
+    from palpitaria.models import Competition, Team
+    from palpitaria.services.scouting_preferences import list_scouting_sources
+
+    sources = list_scouting_sources(db)
+    teams = db.query(Team).order_by(Team.name).all()
+    competitions = db.query(Competition).filter_by(is_active=True).order_by(Competition.name).all()
+    return TEMPLATES.TemplateResponse(
+        request,
+        "admin_fontes.html",
+        {
+            "sources": sources,
+            "teams": teams,
+            "competitions": competitions,
+            "app_timezone": settings.app_timezone,
+        },
+    )
+
+
+@app.post("/admin/fontes/add")
+async def admin_fontes_add(request: Request, db: Session = Depends(get_db), user=Depends(admin_required)):
+    from palpitaria.services.scouting_preferences import add_scouting_source
+
+    form = await request.form()
+    label = str(form.get("label") or "").strip()
+    url = str(form.get("url") or "").strip()
+    notes = str(form.get("notes") or "").strip() or None
+    team_raw = form.get("team_id")
+    team_id = int(team_raw) if team_raw else None
+    comp_code = str(form.get("competition_code") or "").strip().upper() or None
+    try:
+        add_scouting_source(
+            db,
+            label=label,
+            url=url,
+            team_id=team_id,
+            competition_code=comp_code,
+            notes=notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RedirectResponse(url="/admin/fontes", status_code=303)
+
+
+@app.post("/admin/fontes/toggle/{source_id}")
+def admin_fontes_toggle(
+    source_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(admin_required),
+):
+    from palpitaria.services.scouting_preferences import toggle_scouting_source
+
+    toggle_scouting_source(db, source_id)
+    return RedirectResponse(url="/admin/fontes", status_code=303)
+
+
+@app.post("/admin/fontes/delete/{source_id}")
+def admin_fontes_delete(
+    source_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(admin_required),
+):
+    from palpitaria.services.scouting_preferences import delete_scouting_source
+
+    delete_scouting_source(db, source_id)
+    return RedirectResponse(url="/admin/fontes", status_code=303)
 
 
 @app.get("/health/live")
