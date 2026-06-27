@@ -110,22 +110,22 @@
 
     {% if stats[b.id].bets %}
     <div style="margin-top: 1.5rem;">
-      <h3 style="font-size: 0.9rem; color: var(--muted); margin-bottom: 0.5rem;">Últimas Entradas</h3>
-      <div class="table-container" style="max-height: 240px; overflow-y: auto; border: 1px solid #f1f5f9; border-radius: 8px;">
+      <h3 style="font-size: 0.9rem; color: var(--muted); margin-bottom: 0.5rem;">Últimas Entradas <span style="font-weight: 500; font-size: 0.75rem;">(mais recente no topo)</span></h3>
+      <div class="table-container branch-bets-scroll" id="bets-scroll-{{ b.id }}" style="max-height: 240px; overflow-y: auto; border: 1px solid #f1f5f9; border-radius: 8px;">
         <table style="font-size: 0.75rem; margin-top: 0;">
           <thead style="position: sticky; top: 0; background: white; z-index: 10; box-shadow: 0 1px 0 #e2e8f0;">
             <tr>
               <th>Jogo</th>
               <th>Odd</th>
               <th>Stake</th>
-              <th>Status</th>
               <th>P&L</th>
+              <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {% for bet in stats[b.id].bets %}
-            <tr>
+            <tr class="bet-row" id="bet-row-{{ bet.id }}">
               <td>{{ bet.description }}</td>
               <td>{{ bet.odds }}</td>
               <td>
@@ -135,14 +135,23 @@
                 {{ bet.stake }}
                 {% endif %}
               </td>
+              <td class="{% if bet.outcome == 'WIN' %}pass{% elif bet.outcome == 'LOSS' %}fail{% endif %}">
+                {% if bet.outcome == 'PENDING' %}
+                <span style="color: var(--muted);">—</span>
+                {% else %}
+                {{ "%.2f"|format(bet.profit_loss) }}
+                {% endif %}
+              </td>
               <td>
                 {% if bet.outcome == 'PENDING' %}
                 <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                   <form action="/branches/bet/update/{{ bet.id }}" method="POST" style="margin: 0;">
+                    <input type="hidden" name="competition_code" value="{{ current_comp }}">
                     <input type="hidden" name="outcome" value="WIN">
                     <button type="submit" title="Marcar GREEN" style="background: #dcfce7; color: #166534; padding: 0.2rem 0.5rem; font-size: 0.7rem; border: 1px solid #bbf7d0; border-radius: 6px; box-shadow: none;">✅ Green</button>
                   </form>
                   <form action="/branches/bet/update/{{ bet.id }}" method="POST" style="margin: 0;">
+                    <input type="hidden" name="competition_code" value="{{ current_comp }}">
                     <input type="hidden" name="outcome" value="LOSS">
                     <button type="submit" title="Marcar RED" style="background: #fee2e2; color: #991b1b; padding: 0.2rem 0.5rem; font-size: 0.7rem; border: 1px solid #fecaca; border-radius: 6px; box-shadow: none;">❌ Red</button>
                   </form>
@@ -155,16 +164,30 @@
                 {{ bet.outcome }}
                 {% endif %}
               </td>
-              <td class="{% if bet.outcome == 'WIN' %}pass{% elif bet.outcome == 'LOSS' %}fail{% endif %}">
-                {% if bet.outcome == 'PENDING' %}
-                <span style="color: var(--muted);">—</span>
-                {% else %}
-                {{ "%.2f"|format(bet.profit_loss) }}
-                {% endif %}
-              </td>
               <td>
-                <form action="/branches/bet/delete/{{ bet.id }}" method="POST" onsubmit="return confirm('Excluir esta entrada?')">
-                  <button type="submit" style="background: none; box-shadow: none; color: #94a3b8; padding: 0; font-size: 0.8rem; border: none;">✕</button>
+                <div class="bet-actions">
+                  <button type="button" class="bet-action-btn" title="Editar entrada" onclick="toggleBetEdit({{ bet.id }})">✏️</button>
+                  <form action="/branches/bet/delete/{{ bet.id }}" method="POST" onsubmit="return confirm('Excluir esta entrada?')" style="margin: 0; display: inline;">
+                    <input type="hidden" name="competition_code" value="{{ current_comp }}">
+                    <button type="submit" class="bet-action-btn bet-action-delete" title="Excluir">✕</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            <tr class="bet-edit-row" id="bet-edit-{{ bet.id }}" style="display: none;">
+              <td colspan="6" style="background: #f8fafc; padding: 0.75rem;">
+                <form action="/branches/bet/edit/{{ bet.id }}" method="POST" class="bet-edit-form">
+                  <input type="hidden" name="competition_code" value="{{ current_comp }}">
+                  <input type="text" name="description" value="{{ bet.description }}" required placeholder="Jogo" style="flex: 2; min-width: 120px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
+                  <input type="number" step="0.01" name="odds" value="{{ bet.odds }}" required placeholder="Odd" style="flex: 0.6; min-width: 60px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
+                  <input type="number" step="0.01" name="stake" value="{{ bet.stake }}" required placeholder="{% if b.side == 'LAY' %}Ganho{% else %}Stake{% endif %}" title="{% if b.side == 'LAY' %}Valor que deseja ganhar (LAY){% else %}Stake{% endif %}" style="flex: 0.6; min-width: 60px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
+                  <select name="outcome" style="flex: 0.8; min-width: 90px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
+                    <option value="PENDING" {% if bet.outcome == 'PENDING' %}selected{% endif %}>Pendente</option>
+                    <option value="WIN" {% if bet.outcome == 'WIN' %}selected{% endif %}>GREEN</option>
+                    <option value="LOSS" {% if bet.outcome == 'LOSS' %}selected{% endif %}>RED</option>
+                  </select>
+                  <button type="submit" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; box-shadow: none;">Salvar</button>
+                  <button type="button" onclick="toggleBetEdit({{ bet.id }})" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; background: #e2e8f0; color: #475569; box-shadow: none;">Cancelar</button>
                 </form>
               </td>
             </tr>
@@ -177,4 +200,73 @@
   </div>
   {% endfor %}
 </div>
+
+<style>
+  .bet-actions {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .bet-action-btn {
+    background: none;
+    box-shadow: none;
+    border: none;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    line-height: 1;
+    border-radius: 4px;
+  }
+  .bet-action-btn:hover {
+    background: #f1f5f9;
+  }
+  .bet-action-delete {
+    color: #94a3b8;
+    font-size: 0.8rem;
+  }
+  .bet-edit-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  tr.bet-edit-row td {
+    border-top: none !important;
+  }
+</style>
+
+<script>
+  function toggleBetEdit(betId) {
+    const editRow = document.getElementById('bet-edit-' + betId);
+    const dataRow = document.getElementById('bet-row-' + betId);
+    if (!editRow) return;
+    const open = editRow.style.display !== 'none';
+    document.querySelectorAll('.bet-edit-row').forEach(function(row) {
+      row.style.display = 'none';
+    });
+    document.querySelectorAll('.bet-row').forEach(function(row) {
+      row.style.opacity = '1';
+    });
+    if (!open) {
+      editRow.style.display = 'table-row';
+      if (dataRow) dataRow.style.opacity = '0.55';
+      editRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.branch-bets-scroll').forEach(function(el) {
+      el.scrollTop = 0;
+    });
+    var params = new URLSearchParams(window.location.search);
+    if (params.has('saved')) {
+      var branchId = params.get('branch');
+      if (branchId) {
+        var box = document.getElementById('bets-scroll-' + branchId);
+        if (box) box.scrollTop = 0;
+      }
+    }
+  });
+</script>
 {% endblock %}

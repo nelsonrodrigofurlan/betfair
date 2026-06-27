@@ -799,7 +799,7 @@ def list_branches(request: Request, comp: str | None = None, db: Session = Depen
         if comp_code:
             query = query.filter(bet_competition_expr() == comp_code)
 
-        bets = query.order_by(Bet.created_at.desc()).all()
+        bets = query.order_by(Bet.created_at.desc(), Bet.id.desc()).all()
         
         total_pl = sum(bet.profit_loss for bet in bets)
         win_count = sum(1 for bet in bets if bet.outcome == "WIN")
@@ -1235,7 +1235,27 @@ async def add_bet(request: Request, db: Session = Depends(get_db), user=Depends(
     )
     db.add(bet)
     db.commit()
-    return RedirectResponse(url=f"/branches?comp={comp_code}" if comp_code else "/branches", status_code=303)
+    base = _branches_redirect(comp_code)
+    sep = "&" if "?" in base else "?"
+    return RedirectResponse(url=f"{base}{sep}saved=1&branch={branch_id}", status_code=303)
+
+
+def _branches_redirect(comp_code: str | None) -> str:
+    return f"/branches?comp={comp_code}" if comp_code else "/branches"
+
+
+def _user_bet_or_404(db, bet_id: int, user_id: int):
+    from palpitaria.models import Bet, Branch
+
+    bet = (
+        db.query(Bet)
+        .join(Branch)
+        .filter(Bet.id == bet_id, Branch.user_id == user_id)
+        .one_or_none()
+    )
+    if bet is None:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada ou acesso negado")
+    return bet
 
 
 @app.post("/branches/delete/{branch_id}")
@@ -1276,17 +1296,12 @@ async def add_branch(request: Request, db: Session = Depends(get_db), user=Depen
 
 @app.post("/branches/bet/update/{bet_id}")
 async def update_bet_outcome(bet_id: int, request: Request, db: Session = Depends(get_db), user=Depends(login_required)):
-    from palpitaria.models import Bet, Branch
-
     form = await request.form()
     outcome = form.get("outcome")
     if outcome not in ("WIN", "LOSS", "PENDING"):
         raise HTTPException(status_code=400, detail="Status inválido")
 
-    bet = db.query(Bet).join(Branch).filter(Bet.id == bet_id, Branch.user_id == user.id).one_or_none()
-    if bet is None:
-        raise HTTPException(status_code=404, detail="Entrada não encontrada ou acesso negado")
-
+    bet = _user_bet_or_404(db, bet_id, user.id)
     branch = bet.branch
     commission_rate = branch.commission_rate if branch else 6.5
 
@@ -1295,19 +1310,51 @@ async def update_bet_outcome(bet_id: int, request: Request, db: Session = Depend
         bet.stake, bet.odds, outcome, commission_rate, side=branch.side
     )
     db.commit()
-    return RedirectResponse(url="/branches", status_code=303)
+    return RedirectResponse(url=_branches_redirect(form.get("competition_code")), status_code=303)
+
+
+@app.post("/branches/bet/edit/{bet_id}")
+async def edit_bet(bet_id: int, request: Request, db: Session = Depends(get_db), user=Depends(login_required)):
+    form = await request.form()
+    bet = _user_bet_or_404(db, bet_id, user.id)
+    branch = bet.branch
+
+    description = (form.get("description") or "").strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="Informe o jogo")
+
+    try:
+        odds = float(form.get("odds"))
+        stake = float(form.get("stake"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Odd e stake devem ser numéricos") from exc
+
+    if odds <= 1.0 or stake <= 0:
+        raise HTTPException(status_code=400, detail="Odd e stake inválidos")
+
+    outcome = form.get("outcome") or "PENDING"
+    if outcome not in ("WIN", "LOSS", "PENDING"):
+        raise HTTPException(status_code=400, detail="Status inválido")
+
+    commission_rate = branch.commission_rate if branch else 6.5
+    bet.description = description[:200]
+    bet.odds = odds
+    bet.stake = stake
+    bet.outcome = outcome
+    bet.profit_loss = compute_bet_pl(stake, odds, outcome, commission_rate, side=branch.side)
+    db.commit()
+    return RedirectResponse(url=_branches_redirect(form.get("competition_code")), status_code=303)
 
 
 @app.post("/branches/bet/delete/{bet_id}")
-def delete_bet(bet_id: int, db: Session = Depends(get_db), user=Depends(login_required)):
-    from palpitaria.models import Bet, Branch
-    bet = db.query(Bet).join(Branch).filter(Bet.id == bet_id, Branch.user_id == user.id).one_or_none()
-    if not bet:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-    
+async def delete_bet(bet_id: int, request: Request, db: Session = Depends(get_db), user=Depends(login_required)):
+    from palpitaria.models import Bet
+
+    form = await request.form()
+    _user_bet_or_404(db, bet_id, user.id)
     db.query(Bet).filter(Bet.id == bet_id).delete()
     db.commit()
-    return RedirectResponse(url="/branches", status_code=303)
+    return RedirectResponse(url=_branches_redirect(form.get("competition_code")), status_code=303)
 
 
 @app.get("/ciclos", response_class=HTMLResponse)
