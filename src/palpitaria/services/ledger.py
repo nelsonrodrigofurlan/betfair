@@ -108,6 +108,55 @@ def current_period() -> tuple[int, int]:
     return now.year, now.month
 
 
+def previous_period(year: int, month: int) -> tuple[int, int]:
+    if month <= 1:
+        return year - 1, 12
+    return year, month - 1
+
+
+def open_periods() -> set[tuple[int, int]]:
+    """Mês corrente + anterior ficam no ledger ativo (lançamentos tardios)."""
+    cy, cm = current_period()
+    py, pm = previous_period(cy, cm)
+    return {(cy, cm), (py, pm)}
+
+
+def branch_period_choices(*, max_back: int = 3) -> list[dict[str, int | str]]:
+    cy, cm = current_period()
+    choices: list[dict[str, int | str]] = []
+    y, m = cy, cm
+    for _ in range(max_back):
+        choices.append({"year": y, "month": m, "label": period_label(y, m)})
+        y, m = previous_period(y, m)
+    return choices
+
+
+def resolve_view_period(year: int | None, month: int | None) -> tuple[int, int]:
+    cy, cm = current_period()
+    if year is None or month is None:
+        return cy, cm
+    if not (1 <= month <= 12):
+        return cy, cm
+    allowed = {(c["year"], c["month"]) for c in branch_period_choices()}
+    if (year, month) not in allowed:
+        return cy, cm
+    return year, month
+
+
+def bet_created_at_for_period(year: int, month: int) -> datetime:
+    """UTC naive para created_at — mês atual usa agora; passado ancora no meio do mês (SP)."""
+    cy, cm = current_period()
+    if (year, month) == (cy, cm):
+        return datetime.utcnow()
+    tz = ZoneInfo(settings.app_timezone)
+    local = datetime(year, month, 15, 12, 0, tzinfo=tz)
+    return local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+
+
+def bet_in_period(bet: Bet, year: int, month: int) -> bool:
+    return bet_local_period(bet.created_at) == (year, month)
+
+
 def bet_local_period(created_at: datetime) -> tuple[int, int]:
     utc = created_at.replace(tzinfo=ZoneInfo("UTC"))
     local = utc.astimezone(ZoneInfo(settings.app_timezone))
@@ -119,12 +168,32 @@ def period_label(year: int, month: int) -> str:
     return f"{name}/{year}"
 
 
+def branch_period_summary(
+    db: Session,
+    branch_id: int,
+    year: int,
+    month: int,
+    competition_code: str,
+) -> BranchMonthlySummary | None:
+    return (
+        db.query(BranchMonthlySummary)
+        .filter_by(
+            branch_id=branch_id,
+            year=year,
+            month=month,
+            competition_code=competition_code,
+        )
+        .one_or_none()
+    )
+
+
 def close_past_months(db: Session) -> list[BranchMonthlySummary]:
     """
-    Arquiva entradas de meses anteriores (por filial e competição) e remove do ledger ativo.
-    O mês corrente permanece nos cards de Filiais.
+    Gera consolidado mensal (por filial e competição) para meses já fechados.
+    As entradas permanecem no ledger para consulta e lançamentos tardios.
     """
     cy, cm = current_period()
+    keep_open = open_periods()
     bets = db.query(Bet).all()
     if not bets:
         return []
@@ -133,6 +202,8 @@ def close_past_months(db: Session) -> list[BranchMonthlySummary]:
     groups: dict[tuple[int, int, int, str], list[Bet]] = defaultdict(list)
     for bet in bets:
         y, m = bet_local_period(bet.created_at)
+        if (y, m) in keep_open:
+            continue
         if (y, m) < (cy, cm):
             comp = bet.competition_code or "WC"
             groups[(y, m, bet.branch_id, comp)].append(bet)
@@ -148,8 +219,6 @@ def close_past_months(db: Session) -> list[BranchMonthlySummary]:
             .one_or_none()
         )
         if existing:
-            for bet in branch_bets:
-                db.delete(bet)
             continue
 
         branch = db.query(Branch).filter_by(id=branch_id).one_or_none()
@@ -180,9 +249,7 @@ def close_past_months(db: Session) -> list[BranchMonthlySummary]:
         )
         db.add(summary)
         created.append(summary)
-        for bet in branch_bets:
-            db.delete(bet)
 
-    if created or groups:
+    if created:
         db.commit()
     return created

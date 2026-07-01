@@ -5,11 +5,20 @@
   <div style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
       <h1>🏢 Gestão de Filiais</h1>
-      <p class="sub">Acompanhe o P&L de cada mercado separadamente · <strong>Mês ativo: {{ current_period }}</strong></p>
+      <p class="sub">Acompanhe o P&L de cada mercado separadamente · <strong>Exibindo: {{ current_period }}</strong>{% if not is_current_period %} <span style="color: var(--muted); font-size: 0.85rem;">(mês anterior — lançamentos tardios)</span>{% endif %}</p>
     </div>
-    <div style="display: flex; align-items: center; gap: 0.75rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
-      <span style="font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Campeonato:</span>
-      <select name="comp" onchange="window.location.href='/branches?comp=' + this.value" style="border: none; background: transparent; font-weight: 700; color: var(--blue); cursor: pointer; font-size: 1rem; outline: none;">
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 0.75rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
+        <span style="font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Mês:</span>
+        <select id="branch-period-filter" onchange="goBranchesPeriod(this.value)" style="border: none; background: transparent; font-weight: 700; color: var(--blue); cursor: pointer; font-size: 1rem; outline: none;">
+          {% for p in period_choices %}
+            <option value="{{ p.year }}-{{ p.month }}" {% if p.year == selected_year and p.month == selected_month %}selected{% endif %}>{{ p.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.75rem; background: white; padding: 0.5rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow);">
+        <span style="font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Campeonato:</span>
+        <select name="comp" onchange="goBranchesComp(this.value)" style="border: none; background: transparent; font-weight: 700; color: var(--blue); cursor: pointer; font-size: 1rem; outline: none;">
         {% for comp in active_comps %}
           <option value="{{ comp.code }}" {% if current_comp == comp.code %}selected{% endif %}>{{ comp.name }}</option>
         {% endfor %}
@@ -20,6 +29,7 @@
           📌
         </button>
       </form>
+      </div>
     </div>
   </div>
 </header>
@@ -78,6 +88,14 @@
       {% endif %}
     </div>
 
+    {% if stats[b.id].archived_only and stats[b.id].bet_count > 0 %}
+    <p style="margin: 0 0 1rem; font-size: 0.75rem; color: var(--muted); line-height: 1.4; background: #f8fafc; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+      Mês consolidado{% if stats[b.id].closed_at %} em {{ stats[b.id].closed_at.strftime('%d/%m/%Y') }}{% endif %} — totais do fechamento mensal.
+      Entradas individuais deste período não estão mais no ledger ativo.
+      <a href="/historico" style="color: var(--blue);">Ver histórico</a>
+    </p>
+    {% endif %}
+
     <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 1.5rem 0;">
 
     <form action="/branches/add-bet" method="POST" style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -92,6 +110,11 @@
       </div>
       
       <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <select name="bet_period" title="Mês do lançamento" style="flex: 1; min-width: 130px; padding: 0.5rem; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+          {% for p in period_choices %}
+            <option value="{{ p.year }}-{{ p.month }}" {% if p.year == selected_year and p.month == selected_month %}selected{% endif %}>{{ p.label }}</option>
+          {% endfor %}
+        </select>
         <input type="number" step="0.01" name="stake" placeholder="{% if b.side == 'LAY' %}Quanto quer ganhar (Stake){% else %}Stake{% endif %}" required style="flex: 1; min-width: 100px; padding: 0.5rem; border-radius: 8px; border: 1px solid #cbd5e1;">
         <select name="outcome" style="flex: 1; min-width: 120px; padding: 0.5rem; border-radius: 8px; border: 1px solid #cbd5e1;">
           <option value="PENDING">Pendente</option>
@@ -147,11 +170,15 @@
                 <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                   <form action="/branches/bet/update/{{ bet.id }}" method="POST" style="margin: 0;">
                     <input type="hidden" name="competition_code" value="{{ current_comp }}">
+                    <input type="hidden" name="bet_year" value="{{ selected_year }}">
+                    <input type="hidden" name="bet_month" value="{{ selected_month }}">
                     <input type="hidden" name="outcome" value="WIN">
                     <button type="submit" title="Marcar GREEN" style="background: #dcfce7; color: #166534; padding: 0.2rem 0.5rem; font-size: 0.7rem; border: 1px solid #bbf7d0; border-radius: 6px; box-shadow: none;">✅ Green</button>
                   </form>
                   <form action="/branches/bet/update/{{ bet.id }}" method="POST" style="margin: 0;">
                     <input type="hidden" name="competition_code" value="{{ current_comp }}">
+                    <input type="hidden" name="bet_year" value="{{ selected_year }}">
+                    <input type="hidden" name="bet_month" value="{{ selected_month }}">
                     <input type="hidden" name="outcome" value="LOSS">
                     <button type="submit" title="Marcar RED" style="background: #fee2e2; color: #991b1b; padding: 0.2rem 0.5rem; font-size: 0.7rem; border: 1px solid #fecaca; border-radius: 6px; box-shadow: none;">❌ Red</button>
                   </form>
@@ -169,6 +196,8 @@
                   <button type="button" class="bet-action-btn" title="Editar entrada" onclick="toggleBetEdit({{ bet.id }})">✏️</button>
                   <form action="/branches/bet/delete/{{ bet.id }}" method="POST" onsubmit="return confirm('Excluir esta entrada?')" style="margin: 0; display: inline;">
                     <input type="hidden" name="competition_code" value="{{ current_comp }}">
+                    <input type="hidden" name="bet_year" value="{{ selected_year }}">
+                    <input type="hidden" name="bet_month" value="{{ selected_month }}">
                     <button type="submit" class="bet-action-btn bet-action-delete" title="Excluir">✕</button>
                   </form>
                 </div>
@@ -178,6 +207,8 @@
               <td colspan="6" style="background: #f8fafc; padding: 0.75rem;">
                 <form action="/branches/bet/edit/{{ bet.id }}" method="POST" class="bet-edit-form">
                   <input type="hidden" name="competition_code" value="{{ current_comp }}">
+                  <input type="hidden" name="bet_year" value="{{ selected_year }}">
+                  <input type="hidden" name="bet_month" value="{{ selected_month }}">
                   <input type="text" name="description" value="{{ bet.description }}" required placeholder="Jogo" style="flex: 2; min-width: 120px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
                   <input type="number" step="0.01" name="odds" value="{{ bet.odds }}" required placeholder="Odd" style="flex: 0.6; min-width: 60px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
                   <input type="number" step="0.01" name="stake" value="{{ bet.stake }}" required placeholder="{% if b.side == 'LAY' %}Ganho{% else %}Stake{% endif %}" title="{% if b.side == 'LAY' %}Valor que deseja ganhar (LAY){% else %}Stake{% endif %}" style="flex: 0.6; min-width: 60px; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
@@ -237,6 +268,26 @@
 </style>
 
 <script>
+  function branchesQuery(comp, year, month) {
+    const params = new URLSearchParams();
+    if (comp) params.set('comp', comp);
+    if (year) params.set('year', year);
+    if (month) params.set('month', month);
+    const qs = params.toString();
+    return '/branches' + (qs ? '?' + qs : '');
+  }
+
+  function goBranchesPeriod(ym) {
+    const parts = ym.split('-');
+    const y = parts[0];
+    const m = parts[1];
+    window.location.href = branchesQuery('{{ current_comp }}', y, m);
+  }
+
+  function goBranchesComp(comp) {
+    window.location.href = branchesQuery(comp, '{{ selected_year }}', '{{ selected_month }}');
+  }
+
   function toggleBetEdit(betId) {
     const editRow = document.getElementById('bet-edit-' + betId);
     const dataRow = document.getElementById('bet-row-' + betId);

@@ -47,12 +47,16 @@ from palpitaria.services.ai_tracker import (
 )
 from palpitaria.services.ledger import (
     bet_competition_expr,
+    bet_created_at_for_period,
+    bet_in_period,
+    branch_period_choices,
     close_past_months,
     compute_bet_pl,
     current_period,
     migrate_branch_sides,
     normalize_bet_side,
     period_label,
+    resolve_view_period,
 )
 from palpitaria.models import Fixture
 
@@ -755,13 +759,23 @@ def get_logs(user=Depends(admin_required)):
 
 
 @app.get("/branches", response_class=HTMLResponse)
-def list_branches(request: Request, comp: str | None = None, db: Session = Depends(get_db), user=Depends(login_required)):
-    from palpitaria.models import Branch, Bet, Competition
-    from sqlalchemy import func, extract
+def list_branches(
+    request: Request,
+    comp: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(login_required),
+):
+    from palpitaria.models import Branch, Bet, Competition, BranchMonthlySummary
+    from sqlalchemy import func
+    from palpitaria.services.ledger import branch_period_summary
 
     close_past_months(db)
     cy, cm = current_period()
-    period_str = period_label(cy, cm)
+    view_y, view_m = resolve_view_period(year, month)
+    period_str = period_label(view_y, view_m)
+    period_choices = branch_period_choices()
 
     # Buscar competições ativas
     active_comps = db.query(Competition).filter_by(is_active=True).all()
@@ -791,28 +805,46 @@ def list_branches(request: Request, comp: str | None = None, db: Session = Depen
     # Calculate P&L summary for each branch
     stats = {}
     for b in branches:
-        query = db.query(Bet).filter(
-            Bet.branch_id == b.id,
-            extract("year", Bet.created_at) == cy,
-            extract("month", Bet.created_at) == cm
-        )
+        query = db.query(Bet).filter(Bet.branch_id == b.id)
         if comp_code:
             query = query.filter(bet_competition_expr() == comp_code)
 
-        bets = query.order_by(Bet.created_at.desc(), Bet.id.desc()).all()
-        
-        total_pl = sum(bet.profit_loss for bet in bets)
-        win_count = sum(1 for bet in bets if bet.outcome == "WIN")
-        loss_count = sum(1 for bet in bets if bet.outcome == "LOSS")
-        bet_count = len(bets)
-        
+        bets = [bet for bet in query.all() if bet_in_period(bet, view_y, view_m)]
+        bets.sort(key=lambda bet: (bet.created_at, bet.id), reverse=True)
+
+        summary = branch_period_summary(db, b.id, view_y, view_m, comp_code)
+
+        if bets:
+            total_pl = round(sum(bet.profit_loss for bet in bets), 2)
+            win_count = sum(1 for bet in bets if bet.outcome == "WIN")
+            loss_count = sum(1 for bet in bets if bet.outcome == "LOSS")
+            bet_count = len(bets)
+            archived_only = False
+            closed_at = None
+        elif summary:
+            total_pl = round(summary.total_pl, 2)
+            win_count = summary.win_count
+            loss_count = summary.loss_count
+            bet_count = summary.bet_count
+            archived_only = True
+            closed_at = summary.closed_at
+        else:
+            total_pl = 0.0
+            win_count = 0
+            loss_count = 0
+            bet_count = 0
+            archived_only = False
+            closed_at = None
+
         stats[b.id] = {
-            "total_pl": round(total_pl, 2),
+            "total_pl": total_pl,
             "win_count": win_count,
             "loss_count": loss_count,
             "bet_count": bet_count,
             "hit_rate_pct": hit_rate_pct(win_count, bet_count),
-            "bets": bets[:50]
+            "bets": bets[:50],
+            "archived_only": archived_only,
+            "closed_at": closed_at,
         }
 
     return TEMPLATES.TemplateResponse(
@@ -822,6 +854,10 @@ def list_branches(request: Request, comp: str | None = None, db: Session = Depen
             "branches": branches,
             "stats": stats,
             "current_period": period_str,
+            "selected_year": view_y,
+            "selected_month": view_m,
+            "period_choices": period_choices,
+            "is_current_period": (view_y, view_m) == (cy, cm),
             "app_timezone": settings.app_timezone,
             "active_comps": active_comps,
             "current_comp": comp_code,
@@ -1215,6 +1251,7 @@ async def add_bet(request: Request, db: Session = Depends(get_db), user=Depends(
     odds = float(form.get("odds"))
     stake = float(form.get("stake"))
     outcome = form.get("outcome") # WIN, LOSS, PENDING
+    bet_year, bet_month = _parse_bet_period_form(form)
     
     commission_rate = branch.commission_rate if branch else 6.5
     # O valor vindo do form agora é sempre a STAKE (o que se quer ganhar no LAY ou apostar no BACK)
@@ -1231,17 +1268,42 @@ async def add_bet(request: Request, db: Session = Depends(get_db), user=Depends(
         stake=actual_stake,  # Salvamos a stake real (o que se ganha)
         outcome=outcome,
         profit_loss=pl,
-        competition_code=comp_code or settings.world_cup_code
+        competition_code=comp_code or settings.world_cup_code,
+        created_at=bet_created_at_for_period(bet_year, bet_month),
     )
     db.add(bet)
     db.commit()
-    base = _branches_redirect(comp_code)
+    base = _branches_redirect(comp_code, bet_year, bet_month)
     sep = "&" if "?" in base else "?"
     return RedirectResponse(url=f"{base}{sep}saved=1&branch={branch_id}", status_code=303)
 
 
-def _branches_redirect(comp_code: str | None) -> str:
-    return f"/branches?comp={comp_code}" if comp_code else "/branches"
+def _parse_bet_period_form(form) -> tuple[int, int]:
+    raw = form.get("bet_period")
+    if raw and "-" in str(raw):
+        y_s, m_s = str(raw).split("-", 1)
+        try:
+            return resolve_view_period(int(y_s), int(m_s))
+        except (TypeError, ValueError):
+            pass
+    try:
+        return resolve_view_period(int(form.get("bet_year")), int(form.get("bet_month")))
+    except (TypeError, ValueError):
+        return current_period()
+
+
+def _branches_redirect(
+    comp_code: str | None,
+    year: int | None = None,
+    month: int | None = None,
+) -> str:
+    params: list[str] = []
+    if comp_code:
+        params.append(f"comp={comp_code}")
+    if year is not None and month is not None:
+        params.append(f"year={year}")
+        params.append(f"month={month}")
+    return f"/branches?{'&'.join(params)}" if params else "/branches"
 
 
 def _user_bet_or_404(db, bet_id: int, user_id: int):
@@ -1310,7 +1372,11 @@ async def update_bet_outcome(bet_id: int, request: Request, db: Session = Depend
         bet.stake, bet.odds, outcome, commission_rate, side=branch.side
     )
     db.commit()
-    return RedirectResponse(url=_branches_redirect(form.get("competition_code")), status_code=303)
+    bet_year, bet_month = _parse_bet_period_form(form)
+    return RedirectResponse(
+        url=_branches_redirect(form.get("competition_code"), bet_year, bet_month),
+        status_code=303,
+    )
 
 
 @app.post("/branches/bet/edit/{bet_id}")
@@ -1343,7 +1409,11 @@ async def edit_bet(bet_id: int, request: Request, db: Session = Depends(get_db),
     bet.outcome = outcome
     bet.profit_loss = compute_bet_pl(stake, odds, outcome, commission_rate, side=branch.side)
     db.commit()
-    return RedirectResponse(url=_branches_redirect(form.get("competition_code")), status_code=303)
+    bet_year, bet_month = _parse_bet_period_form(form)
+    return RedirectResponse(
+        url=_branches_redirect(form.get("competition_code"), bet_year, bet_month),
+        status_code=303,
+    )
 
 
 @app.post("/branches/bet/delete/{bet_id}")
@@ -1354,7 +1424,11 @@ async def delete_bet(bet_id: int, request: Request, db: Session = Depends(get_db
     _user_bet_or_404(db, bet_id, user.id)
     db.query(Bet).filter(Bet.id == bet_id).delete()
     db.commit()
-    return RedirectResponse(url=_branches_redirect(form.get("competition_code")), status_code=303)
+    bet_year, bet_month = _parse_bet_period_form(form)
+    return RedirectResponse(
+        url=_branches_redirect(form.get("competition_code"), bet_year, bet_month),
+        status_code=303,
+    )
 
 
 @app.get("/ciclos", response_class=HTMLResponse)
